@@ -727,7 +727,18 @@
               
               <div className="space-y-5">
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 mb-2 tracking-wide">EXPERIENCE LEVEL</label>
+                  <label className="block text-xs font-bold text-gray-400 mb-2 tracking-wide flex items-center gap-2">
+  EXPERIENCE LEVEL
+  <button
+    type="button"
+    className="text-gray-400 hover:text-white text-sm"
+    onClick={() => alert(
+      "Beginner: New to structured training, focus on technique and consistency.\n\n" +
+      "Intermediate: 6–24 months of training with solid form and progressive overload.\n\n" +
+      "Advanced: 2+ years of consistent training, high intensity and volume tolerance."
+    )}
+  >ℹ️</button>
+</label>
                   <div className="grid grid-cols-3 gap-2">
                     {['Beginner', 'Intermediate', 'Advanced'].map(lvl => (
                       <button key={lvl} onClick={() => setConfig({...config, experience: lvl})}
