@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TrainIQ - Evidence-Based Training</title>
+    <link rel="manifest" href="manifest.json">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Antonio:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; font-family: 'Inter', sans-serif; background: #050505; color: #fff; }
+        .font-display { font-family: 'Antonio', sans-serif; text-transform: uppercase; letter-spacing: 0.02em; }
+        .tab-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; backdrop-filter: blur(24px); }
+        .content-with-tabs { padding-bottom: calc(72px + env(safe-area-inset-bottom)); min-height: 100vh; }
+        .glass { background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.10); box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+        .premium-gradient { background: linear-gradient(135deg, #f97316 0%, #dc2626 100%); }
+        .app-bg {
+          background:
+            radial-gradient(1200px 600px at 20% -10%, rgba(249,115,22,0.22), rgba(0,0,0,0) 60%),
+            radial-gradient(900px 500px at 95% 20%, rgba(220,38,38,0.18), rgba(0,0,0,0) 55%),
+            radial-gradient(700px 450px at 40% 120%, rgba(249,115,22,0.10), rgba(0,0,0,0) 55%),
+            #050505;
+        }
+        .ring-premium { box-shadow: 0 0 0 1px rgba(255,255,255,0.10), 0 18px 40px rgba(0,0,0,0.45); }
+        .btn-touch { min-height: 48px; transition: all 0.2s; }
+        .btn-touch:active { transform: scale(0.98); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <!-- Evidence-based exercise database (used for substitutions) -->
+    <script src="exercise-database.js"></script>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // ==================== EXERCISE DATABASE ====================
+        const EXERCISE_DB = {
+          chest_press: [
+            { name: "Barbell Bench Press", primary: "chest", type: "compound", skill: "high", fatigue: "high", repRange: [3, 12] },
+            { name: "Incline Barbell Press", primary: "chest", type: "compound", skill: "high", fatigue: "high", repRange: [5, 12] },
+            { name: "Dumbbell Bench Press", primary: "chest", type: "compound", skill: "medium", fatigue: "high", repRange: [6, 15] },
+            { name: "Incline Dumbbell Press", primary: "chest", type: "compound", skill: "medium", fatigue: "high", repRange: [6, 15] },
+            { name: "Weighted Dips", primary: "chest", type: "compound", skill: "high", fatigue: "high", repRange: [5, 12] },
+            { name: "Machine Chest Press", primary: "chest", type: "compound", skill: "low", fatigue: "medium", repRange: [8, 20] }
+          ],
+          chest_fly: [
+            { name: "Cable Flyes", primary: "chest", type: "isolation", skill: "low", fatigue: "low", repRange: [10, 20] },
+            { name: "Dumbbell Flyes", primary: "chest", type: "isolation", skill: "medium", fatigue: "medium", repRange: [10, 20] },
+            { name: "Pec Deck", primary: "chest", type: "isolation", skill: "low", fatigue: "low", repRange: [12, 25] }
+          ],
+          back_vertical: [
+            { name: "Pull-ups", primary: "lats", type: "compound", skill: "high", fatigue: "high", repRange: [5, 15] },
+            { name: "Weighted Pull-ups", primary: "lats", type: "compound", skill: "high", fatigue: "high", repRange: [3, 10] },
+            { name: "Lat Pulldown", primary: "lats", type: "compound", skill: "low", fatigue: "medium", repRange: [8, 15] },
+            { name: "Wide-Grip Pulldown", primary: "lats", type: "compound", skill: "low", fatigue: "medium", repRange: [8, 15] }
+          ],
+          back_horizontal: [
+            { name: "Barbell Row", primary: "back", type: "compound", skill: "high", fatigue: "high", repRange: [5, 12] },
+            { name: "Pendlay Row", primary: "back", type: "compound", skill: "high", fatigue: "high", repRange: [5, 10] },
+            { name: "T-Bar Row", primary: "back", type: "compound", skill: "medium", fatigue: "high", repRange: [6, 12] },
+            { name: "Dumbbell Row", primary: "back", type: "compound", skill: "medium", fatigue: "medium", repRange: [8, 15] },
+            { name: "Seated Cable Row", primary: "back", type: "compound", skill: "low", fatigue: "medium", repRange: [10, 20] },
+            { name: "Chest-Supported Row", primary: "back", type: "compound", skill: "low", fatigue: "medium", repRange: [8, 15] }
+          ],
+          shoulders_press: [
+            { name: "Overhead Press", primary: "shoulders", type: "compound", skill: "high", fatigue: "high", repRange: [4, 10] },
+            { name: "Seated Dumbbell Press", primary: "shoulders", type: "compound", skill: "medium", fatigue: "high", repRange: [6, 12] },
+            { name: "Arnold Press", primary: "shoulders", type: "compound", skill: "medium", fatigue: "medium", repRange: [8, 15] },
+            { name: "Machine Shoulder Press", primary: "shoulders", type: "compound", skill: "low", fatigue: "medium", repRange: [8, 15] }
+          ],
+          shoulders_lateral: [
+            { name: "Lateral Raise", primary: "shoulders", type: "isolation", skill: "low", fatigue: "low", repRange: [10, 20] },
+            { name: "Cable Lateral Raise", primary: "shoulders", type: "isolation", skill: "low", fatigue: "low", repRange: [12, 25] },
+            { name: "Machine Lateral Raise", primary: "shoulders", type: "isolation", skill: "low", fatigue: "low", repRange: [12, 25] }
+          ],
+          shoulders_rear: [
+            { name: "Face Pull", primary: "rear_delts", type: "isolation", skill: "low", fatigue: "low", repRange: [12, 20] },
+            { name: "Reverse Pec Deck", primary: "rear_delts", type: "isolation", skill: "low", fatigue: "low", repRange: [12, 20] },
+            { name: "Bent-Over Fly", primary: "rear_delts", type: "isolation", skill: "medium", fatigue: "low", repRange: [12, 20] }
+          ],
+          legs_squat: [
+            { name: "Back Squat", primary: "quads", type: "compound", skill: "high", fatigue: "very_high", repRange: [3, 10] },
+            { name: "Front Squat", primary: "quads", type: "compound", skill: "high", fatigue: "high", repRange: [5, 10] },
+            { name: "Bulgarian Split Squat", primary: "quads", type: "compound", skill: "medium", fatigue: "high", repRange: [8, 15] },
+            { name: "Leg Press", primary: "quads", type: "compound", skill: "low", fatigue: "high", repRange: [8, 20] },
+            { name: "Hack Squat", primary: "quads", type: "compound", skill: "low", fatigue: "high", repRange: [8, 15] }
+          ],
+          legs_hinge: [
+            { name: "Conventional Deadlift", primary: "hamstrings", type: "compound", skill: "high", fatigue: "very_high", repRange: [3, 8] },
+            { name: "Romanian Deadlift", primary: "hamstrings", type: "compound", skill: "high", fatigue: "high", repRange: [6, 12] },
+            { name: "Sumo Deadlift", primary: "hamstrings", type: "compound", skill: "high", fatigue: "very_high", repRange: [3, 8] },
+            { name: "Trap Bar Deadlift", primary: "hamstrings", type: "compound", skill: "medium", fatigue: "very_high", repRange: [5, 10] },
+            { name: "Dumbbell RDL", primary: "hamstrings", type: "compound", skill: "medium", fatigue: "medium", repRange: [8, 15] }
+          ],
+          legs_isolation: [
+            { name: "Leg Extension", primary: "quads", type: "isolation", skill: "low", fatigue: "low", repRange: [10, 20] },
+            { name: "Leg Curl", primary: "hamstrings", type: "isolation", skill: "low", fatigue: "low", repRange: [10, 20] },
+            { name: "Seated Leg Curl", primary: "hamstrings", type: "isolation", skill: "low", fatigue: "low", repRange: [10, 20] }
+          ],
+          legs_glutes: [
+            { name: "Hip Thrust", primary: "glutes", type: "compound", skill: "medium", fatigue: "medium", repRange: [8, 15] },
+            { name: "Glute Bridge", primary: "glutes", type: "compound", skill: "low", fatigue: "medium", repRange: [10, 20] }
+          ],
+          legs_calves: [
+            { name: "Standing Calf Raise", primary: "calves", type: "isolation", skill: "low", fatigue: "low", repRange: [10, 20] },
+            { name: "Seated Calf Raise", primary: "calves", type: "isolation", skill: "low", fatigue: "low", repRange: [12, 25] }
+          ],
+          arms_biceps: [
+            { name: "Barbell Curl", primary: "biceps", type: "isolation", skill: "low", fatigue: "low", repRange: [8, 15] },
+            { name: "Dumbbell Curl", primary: "biceps", type: "isolation", skill: "low", fatigue: "low", repRange: [8, 15] },
+            { name: "Hammer Curl", primary: "biceps", type: "isolation", skill: "low", fatigue: "low", repRange: [10, 15] },
+            { name: "Cable Curl", primary: "biceps", type: "isolation", skill: "low", fatigue: "low", repRange: [10, 20] },
+            { name: "Preacher Curl", primary: "biceps", type: "isolation", skill: "low", fatigue: "low", repRange: [10, 15] }
+          ],
+          arms_triceps: [
+            { name: "Close-Grip Bench", primary: "triceps", type: "compound", skill: "medium", fatigue: "medium", repRange: [6, 12] },
+            { name: "Overhead Extension", primary: "triceps", type: "isolation", skill: "low", fatigue: "low", repRange: [10, 15] },
+            { name: "Tricep Pushdown", primary: "triceps", type: "isolation", skill: "low", fatigue: "low", repRange: [10, 20] },
+            { name: "Rope Pushdown", primary: "triceps", type: "isolation", skill: "low", fatigue: "low", repRange: [12, 20] },
+            { name: "Skull Crusher", primary: "triceps", type: "isolation", skill: "medium", fatigue: "medium", repRange: [8, 12] }
+          ]
+        };
+
+        // ==================== EXERCISE TAG SCHEMA (for substitutions) ====================
+        // We keep the generator database (EXERCISE_DB) lightweight, but use the more
+        // comprehensive EXERCISE_DATABASE (loaded from exercise-database.js) for swaps.
+        //
+        // Canonical tag schema for matching "similar stimulus" alternatives:
+        // {
+        //   id: string,
+        //   name: string,
+        //   pattern: 'horizontal_push'|'vertical_push'|'horizontal_pull'|'vertical_pull'|'squat'|'hinge'|
+        //            'knee_extension'|'knee_flexion'|'hip_extension'|'hip_abduction'|
+        //            'elbow_flexion'|'elbow_extension'|'shoulder_abduction'|'shoulder_external_rotation'|
+        //            'calf_raise'|'core',
+        //   primeMover: string,                 // e.g., 'chest', 'quads'
+        //   secondary: string[],                 // e.g., ['triceps','front_delts']
+        //   type: 'compound'|'isolation',
+        //   equipment: 'barbell'|'dumbbell'|'machine'|'cable'|'bodyweight'|'smith'|'bands'|'other',
+        //   stabilityDemand: 'low'|'medium'|'high',   // how much stabilization the lifter must provide
+        //   skill: 'low'|'medium'|'high',
+        //   fatigue: 'low'|'medium'|'high'|'very_high',
+        //   repRange: [number, number],
+        //   progression: 'linear'|'weighted'|'reps'|'double_progression'|'other'
+        // }
+
+        const PATTERN_FROM_CATEGORY = (cat) => {
+          if (!cat) return 'other';
+          if (cat.startsWith('chest_')) return 'horizontal_push';
+          if (cat.startsWith('back_vertical')) return 'vertical_pull';
+          if (cat.startsWith('back_horizontal')) return 'horizontal_pull';
+          if (cat.startsWith('shoulders_press')) return 'vertical_push';
+          if (cat.startsWith('shoulders_lateral')) return 'shoulder_abduction';
+          if (cat.startsWith('shoulders_rear')) return 'shoulder_external_rotation';
+          if (cat.startsWith('legs_squat')) return 'squat';
+          if (cat.startsWith('legs_hinge')) return 'hinge';
+          if (cat.startsWith('legs_isolation')) return 'knee_extension';
+          if (cat.startsWith('legs_glutes')) return 'hip_extension';
+          if (cat.startsWith('legs_calves')) return 'calf_raise';
+          if (cat.startsWith('arms_biceps')) return 'elbow_flexion';
+          if (cat.startsWith('arms_triceps')) return 'elbow_extension';
+          return 'other';
+        };
+
+        const stabilityDemandFromEquipment = (eq) => {
+          // "stabilityDemand" reflects how much stabilization the lifter must provide.
+          if (eq === 'machine') return 'low';
+          if (eq === 'cable') return 'medium';
+          if (eq === 'smith') return 'low';
+          if (eq === 'dumbbell') return 'high';
+          if (eq === 'barbell') return 'high';
+          if (eq === 'bodyweight') return 'high';
+          return 'medium';
+        };
+
+        const normalize = (s) => String(s || '').trim().toLowerCase();
+
+        const buildExerciseIndex = () => {
+          const idx = new Map();
+          try {
+            if (typeof EXERCISE_DATABASE !== 'object') return idx;
+            Object.entries(EXERCISE_DATABASE).forEach(([category, arr]) => {
+              (arr || []).forEach((ex, i) => {
+                const name = ex?.name;
+                if (!name) return;
+                idx.set(normalize(name), {
+                  id: `${category}:${i}`,
+                  name,
+                  category,
+                  pattern: PATTERN_FROM_CATEGORY(category),
+                  primeMover: ex.primary,
+                  secondary: ex.secondary || [],
+                  type: ex.type,
+                  equipment: ex.equipment || 'other',
+                  stabilityDemand: stabilityDemandFromEquipment(ex.equipment),
+                  skill: ex.skill || 'medium',
+                  fatigue: ex.fatigue || 'medium',
+                  repRange: ex.repRange || [8, 12],
+                  progression: ex.progression || 'other'
+                });
+              });
+            });
+          } catch (e) {
+            // fail silently; substitutions just won't show.
+          }
+          return idx;
+        };
+
+        const EXERCISE_INDEX = buildExerciseIndex();
+
+        const getExerciseTags = (name) => EXERCISE_INDEX.get(normalize(name)) || null;
+
+        const overlapScore = (a, b) => {
+          // Measures rep-range overlap (0..1)
+          if (!a || !b) return 0;
+          const [a1, a2] = a; const [b1, b2] = b;
+          const lo = Math.max(a1, b1);
+          const hi = Math.min(a2, b2);
+          if (hi < lo) return 0;
+          const inter = hi - lo;
+          const span = Math.max(a2 - a1, b2 - b1, 1);
+          return Math.min(1, inter / span);
+        };
+
+        const rankAlternatives = (origTags, candidates) => {
+          const fatigueRank = { low: 0, medium: 1, high: 2, very_high: 3 };
+          const skillRank = { low: 0, medium: 1, high: 2 };
+          const stabRank = { low: 0, medium: 1, high: 2 };
+
+          const score = (c) => {
+            let s = 0;
+            // Hard matches are filtered already; scoring is for ordering.
+            if (c.equipment === origTags.equipment) s += 2;
+            s += Math.max(0, 1 - Math.abs((stabRank[c.stabilityDemand] ?? 1) - (stabRank[origTags.stabilityDemand] ?? 1)) * 0.5);
+            s += Math.max(0, 1 - Math.abs((skillRank[c.skill] ?? 1) - (skillRank[origTags.skill] ?? 1)) * 0.5);
+            s += Math.max(0, 1 - Math.abs((fatigueRank[c.fatigue] ?? 1) - (fatigueRank[origTags.fatigue] ?? 1)) * 0.35);
+            s += overlapScore(c.repRange, origTags.repRange);
+            return s;
+          };
+
+          return candidates
+            .map(c => ({ ...c, _score: score(c) }))
+            .sort((a, b) => b._score - a._score)
+            .slice(0, 6);
+        };
+
+        const getAlternativesForExercise = (exerciseName, { role = 'accessory' } = {}) => {
+          const orig = getExerciseTags(exerciseName);
+          if (!orig) return [];
+
+          // Evidence-based constraints: preserve stimulus
+          // - same movement pattern
+          // - same prime mover
+          // - same type (compound vs isolation)
+          // - (optional) keep equipment close via ranking
+          const pool = Array.from(EXERCISE_INDEX.values());
+
+          const strict = pool.filter(c =>
+            c.name !== orig.name &&
+            c.pattern === orig.pattern &&
+            c.primeMover === orig.primeMover &&
+            c.type === orig.type
+          );
+
+          // Main lift substitutions should be conservative; require same equipment if possible.
+          const conservative = (role === 'main' || role === 'secondary');
+          const preferred = conservative
+            ? strict.filter(c => c.equipment === orig.equipment)
+            : strict;
+
+          const candidates = preferred.length >= 3 ? preferred : strict;
+          return rankAlternatives(orig, candidates);
+        };
+
+        // ==================== EVIDENCE-BASED CALCULATIONS ====================
+
+        // ==================== SUPERSET LOGIC ====================
+        // Supersets are intended ONLY for non-main lifts (accessories).
+        // This function tags exercises with superset metadata; if the UI
+        // ignores it, nothing breaks.
+        function applySupersets(exercises, programType) {
+          if (!Array.isArray(exercises) || exercises.length < 3) return exercises;
+
+          // Determine how many "main" movements to protect from supersets.
+          const mainLiftCount = programType === 'Strength' ? 2 : 1;
+
+          // Eligible = non-main exercises. For Strength, only isolation work.
+          const eligibleIdx = [];
+          for (let i = mainLiftCount; i < exercises.length; i++) {
+            const ex = exercises[i];
+            if (!ex) continue;
+
+            if (programType === 'Strength') {
+              if (ex.type === 'isolation') eligibleIdx.push(i);
+              continue;
+            }
+
+            // For non-strength: prefer higher-rep / lower-skill accessories
+            // (keeps heavy compounds from being paired).
+            const minRep = Array.isArray(ex.reps) ? ex.reps[0] : 0;
+            if (ex.type === 'isolation' || minRep >= 8) eligibleIdx.push(i);
+          }
+
+          // Pair eligible exercises into A1/A2, B1/B2, etc. — with gym-realistic constraints.
+          const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+          let group = 0;
+
+          // Logistics rules (commercial gym):
+          // - If a barbell lift is involved, the partner MUST be portable (bodyweight/DB/band/kettlebell).
+          // - No-rest (0–30s) supersets should avoid “walk-away” machine swaps.
+          const PORTABLE_EQUIPMENT = new Set(['bodyweight', 'dumbbell', 'kettlebell', 'band', 'resistance band']);
+
+          const eq = (ex) => (ex?.equipment || '').toString().toLowerCase();
+          const isPortable = (ex) => PORTABLE_EQUIPMENT.has(eq(ex));
+          const isBarbell = (ex) => eq(ex) === 'barbell';
+
+          function canSuperset(a, b) {
+            if (!a || !b) return false;
+
+            const ea = eq(a);
+            const eb = eq(b);
+
+            // Barbell rule: barbell + portable only (prevents Pendlay Row → Reverse Pec Deck).
+            if (ea === 'barbell' || eb === 'barbell') {
+              if (ea === 'barbell' && eb === 'barbell') return false;
+              const partner = ea === 'barbell' ? b : a;
+              return isPortable(partner);
+            }
+
+            // Otherwise allow; these are already filtered to accessories/isolation or higher-rep work.
+            return true;
+          }
+
+          const used = new Set();
+          for (let j = 0; j < eligibleIdx.length; j++) {
+            const i1 = eligibleIdx[j];
+            if (used.has(i1)) continue;
+
+            // Find the next compatible partner for i1.
+            let i2 = null;
+            for (let k = j + 1; k < eligibleIdx.length; k++) {
+              const cand = eligibleIdx[k];
+              if (used.has(cand)) continue;
+              if (canSuperset(exercises[i1], exercises[cand])) {
+                i2 = cand;
+                break;
+              }
+            }
+            if (i2 == null) continue;
+
+            const g = letters[group] || `G${group + 1}`;
+
+            // Clear, user-facing superset instructions + metadata for the UI.
+            const postRest = exercises[i1].rest || '60-120s';
+            const betweenRest = '0-30s';
+
+            exercises[i1].superset = { group: g, position: 1, partner: exercises[i2].name, betweenRest, postRest };
+            exercises[i2].superset = { group: g, position: 2, partner: exercises[i1].name, betweenRest, postRest };
+
+            // Keep the inline rest label short and readable.
+            const restLabel = `Superset: ${betweenRest} between • ${postRest} after pair`;
+            exercises[i1].rest = restLabel;
+            exercises[i2].rest = restLabel;
+
+            used.add(i1);
+            used.add(i2);
+            group += 1;
+          }
+
+          return exercises;
+        }
+        
+        function roundWeight(w) {
+          const n = parseFloat(w);
+          if (!n) return 0;
+          if (n < 100) {
+            const m = n % 2.5;
+            return m < 1.25 ? Math.floor(n/2.5)*2.5 : Math.ceil(n/2.5)*2.5;
+          }
+          const m = n % 5;
+          return m < 2.5 ? Math.floor(n/5)*5 : Math.ceil(n/5)*5;
+        }
+        
+        function calc1RMWeight(oneRM, minRep, maxRep, rir) {
+          if (!oneRM) return null;
+          const avgRep = (minRep + maxRep) / 2;
+          const targetReps = avgRep + rir;
+          const percentage = 1.0278 - (0.0278 * targetReps);
+          return roundWeight(oneRM * percentage);
+        }
+        
+        function getPhaseParams(week) {
+          if (week <= 4) {
+            return { 
+              phase: 'Base', 
+              volumeMult: week === 4 ? 0.5 : 1.0, 
+              intensityAdj: 0,
+              isDeload: week === 4 
+            };
+          } else if (week <= 8) {
+            return { 
+              phase: 'Intensification', 
+              volumeMult: week === 8 ? 0.5 : 0.85, 
+              intensityAdj: week === 8 ? -10 : 5,
+              isDeload: week === 8 
+            };
+          } else {
+            return { 
+              phase: 'Peak', 
+              volumeMult: week === 12 ? 0.5 : 0.7, 
+              intensityAdj: week === 12 ? -15 : 10,
+              isDeload: week === 12 
+            };
+          }
+        }
+        
+        function getRepRange(programType, exType, position) {
+          const ranges = {
+            Hypertrophy: { compound: [6, 10], isolation: [10, 20] },
+            Strength: { compound: [3, 6], isolation: [8, 15] },
+            Powerbuilding: { compound: [4, 8], isolation: [10, 15] },
+            Minimalist: { compound: [6, 10], isolation: [12, 20] }
+          };
+          const r = ranges[programType][exType];
+          return position === 0 ? r : [r[0] + 2, r[1] + 3];
+        }
+        
+        function getRIR(experience, exType, setNum, totalSets) {
+          const base = {
+            Beginner: { compound: 3, isolation: 2 },
+            Intermediate: { compound: 2, isolation: 1 },
+            Advanced: { compound: 1, isolation: 0 }
+          };
+          let rir = base[experience][exType];
+          if (setNum === 1) rir += 1;
+          else if (setNum === totalSets) rir = Math.max(0, rir - 1);
+          return rir;
+        }
+        
+        function getRest(minRep, exType, programType) {
+          if (minRep <= 6 && exType === 'compound') {
+            return programType === 'Strength' ? '3-5min' : '2-4min';
+          }
+          if (exType === 'compound') return '90-180s';
+          return '60-120s';
+        }
+        
+        function getSets(experience, exType, programType) {
+          const volumeMap = {
+            Beginner: { compound: 3, isolation: 2 },
+            Intermediate: { compound: 4, isolation: 3 },
+            Advanced: { compound: 5, isolation: 3 }
+          };
+          const multiplier = programType === 'Strength' ? 0.75 : 
+                           programType === 'Minimalist' ? 0.6 : 1.0;
+          return Math.max(2, Math.round(volumeMap[experience][exType] * multiplier));
+        }
+
+        // ==================== PROGRAM GENERATION ====================
+        
+        function generateProgram(config) {
+          const { experience, days, programType, oneRMs } = config;
+          const daysNum = parseInt(days);
+          
+          const splitTemplates = {
+            3: [['Full'], ['Full'], ['Full']],
+            4: [['Upper'], ['Lower'], ['Upper'], ['Lower']],
+            5: [['Push'], ['Pull'], ['Legs'], ['Upper'], ['Lower']],
+            6: [['Push'], ['Pull'], ['Legs'], ['Push'], ['Pull'], ['Legs']]
+          };
+          
+          const split = splitTemplates[daysNum];
+          
+          const exercisesByDay = {
+            Upper: ['chest_press', 'back_horizontal', 'shoulders_press', 'arms_biceps', 'arms_triceps'],
+            Lower: ['legs_squat', 'legs_hinge', 'legs_isolation', 'legs_calves'],
+            Push: ['chest_press', 'shoulders_press', 'chest_fly', 'shoulders_lateral', 'arms_triceps'],
+            Pull: ['back_vertical', 'back_horizontal', 'shoulders_rear', 'arms_biceps'],
+            Legs: ['legs_squat', 'legs_hinge', 'legs_isolation', 'legs_glutes', 'legs_calves'],
+            Full: ['legs_squat', 'chest_press', 'back_horizontal', 'shoulders_press']
+          };
+          
+          const weeks = [];
+          for (let w = 1; w <= 12; w++) {
+            const phase = getPhaseParams(w);
+            const workouts = [];
+            
+            for (let d = 0; d < daysNum; d++) {
+              const dayType = split[d][0];
+              const pools = exercisesByDay[dayType];
+              const exercises = [];
+              
+              pools.forEach((pool, idx) => {
+                const available = EXERCISE_DB[pool];
+                if (!available || available.length === 0) return;
+                
+                const rotation = (w - 1 + d) % available.length;
+                const ex = available[rotation];
+                const reps = getRepRange(programType, ex.type, idx);
+                const sets = Math.max(2, Math.round(getSets(experience, ex.type, programType) * phase.volumeMult));
+                const rir = getRIR(experience, ex.type, 1, sets);
+                
+                exercises.push({
+                  name: ex.name,
+                  primary: ex.primary,
+                  type: ex.type,
+                  sets,
+                  reps,
+                  rir,
+                  rest: getRest(reps[0], ex.type, programType),
+                  weight: oneRMs[ex.primary] ? calc1RMWeight(oneRMs[ex.primary], reps[0], reps[1], rir) : null
+                });
+              });
+              
+              // Label lifts for clearer coaching cues (evidence-based nomenclature).
+              const mainLiftCount = programType === 'Strength' ? 2 : 1;
+              exercises.forEach((ex, i) => {
+                if (!ex) return;
+                if (programType === 'Strength') {
+                  ex.role = i === 0 ? 'main' : (i === 1 ? 'secondary' : 'accessory');
+                } else {
+                  ex.role = i === 0 ? 'main' : 'accessory';
+                }
+              });
+
+              // Apply supersets if user enabled them. This tags only non-main lifts.
+              const finalExercises = config.supersets ? applySupersets(exercises, programType) : exercises;
+
+              workouts.push({ 
+                dayNumber: d + 1, 
+                dayType, 
+                exercises: finalExercises 
+              });
+            }
+            
+            weeks.push({ 
+              number: w, 
+              phase: phase.phase, 
+              deload: phase.isDeload, 
+              workouts 
+            });
+          }
+          
+          return { weeks, config, createdAt: new Date().toISOString() };
+        }
+
+        
+        // ==================== PROFILE-LINK (MULTI-USER) STORAGE ====================
+        // 100% client-side, 100% free: we namespace localStorage by a profileId in the URL hash.
+        // Link format:  #/u/<profileId>  (users can share/bookmark this to keep a distinct profile)
+        const PROFILE_HASH_RE = /#\/u\/([^/]+)/;
+
+        function getProfileIdFromHash() {
+          const hash = window.location.hash || "";
+          const m = hash.match(PROFILE_HASH_RE);
+          return m && m[1] ? decodeURIComponent(m[1]) : "";
+        }
+
+        function setHashToProfile(profileId) {
+          // Preserve any existing trailing path after the profile segment if present.
+          // Even though this app doesn't route by hash, this keeps links future-proof.
+          const hash = window.location.hash || "";
+          const rest = hash.replace(PROFILE_HASH_RE, "").replace(/^#/, "");
+          const suffix = rest && rest.startsWith("/") ? rest : (rest ? "/" + rest : "");
+          window.location.hash = `#/u/${encodeURIComponent(profileId)}${suffix}`;
+        }
+
+        function ensureProfileId() {
+          let pid = getProfileIdFromHash();
+          if (!pid) {
+            pid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+            setHashToProfile(pid);
+          }
+          return pid;
+        }
+
+        function storageKey(k) {
+          const pid = ensureProfileId();
+          return `trainiq:${pid}:${k}`;
+        }
+
+        const storage = {
+          get(k, fallback) {
+            try {
+              const raw = localStorage.getItem(storageKey(k));
+              if (!raw) return fallback;
+              return JSON.parse(raw);
+            } catch (e) {
+              return fallback;
+            }
+          },
+          set(k, value) {
+            try {
+              localStorage.setItem(storageKey(k), JSON.stringify(value));
+            } catch (e) {}
+          },
+          remove(k) {
+            try { localStorage.removeItem(storageKey(k)); } catch (e) {}
+          },
+          clearProfile() {
+            const pid = ensureProfileId();
+            const prefix = `trainiq:${pid}:`;
+            const toRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && key.startsWith(prefix)) toRemove.push(key);
+            }
+            toRemove.forEach(k => localStorage.removeItem(k));
+          }
+        };
+
+        // One-time migration: if a user has legacy single-profile data, move it into the current profile.
+        (function migrateLegacyStorage() {
+          const legacyKey = "trainiq-pro";
+          const newKey = storageKey("state");
+          try {
+            const hasNew = localStorage.getItem(newKey);
+            const legacy = localStorage.getItem(legacyKey);
+            if (!hasNew && legacy) {
+              localStorage.setItem(newKey, legacy);
+            }
+          } catch (e) {}
+        })();
+
+
+        // ==================== MAIN APP ====================
+        
+        function TrainIQ() {
+          const [tab, setTab] = useState('home');
+          const [config, setConfig] = useState({
+            experience: '',
+            days: '',
+            time: '',
+            programType: '',
+            supersets: false,
+            oneRMs: { chest: '', lats: '', shoulders: '', quads: '', hamstrings: '' }
+          });
+          const [program, setProgram] = useState(null);
+          const [history, setHistory] = useState([]);
+          
+          useEffect(() => {
+            const saved = storage.get('state', null);
+            if (saved) {
+              const data = saved;
+              if (data.config) setConfig(data.config);
+              if (data.program) setProgram(data.program);
+              if (data.history) setHistory(data.history);
+            }
+          }, []);
+          
+          useEffect(() => {
+            storage.set('state', { config, program, history });
+          }, [config, program, history]);
+          
+          const handleGenerate = () => {
+            if (program) {
+              setHistory(prev => [program, ...prev].slice(0, 10));
+            }
+            const newProgram = generateProgram(config);
+            setProgram(newProgram);
+            setTab('workouts');
+          };
+          
+          return (
+            <div className="min-h-screen app-bg">
+              {tab === 'home' && (
+                <HomeScreen config={config} setConfig={setConfig} onGenerate={handleGenerate} />
+              )}
+              {tab === 'workouts' && program && (
+                <WorkoutsScreen program={program} onSave={() => {
+                  if (program && !history.find(p => p.createdAt === program.createdAt)) {
+                    setHistory(prev => [program, ...prev].slice(0, 10));
+                  }
+                }} />
+              )}
+              {tab === 'history' && (
+                <HistoryScreen history={history} onDelete={(idx) => setHistory(prev => prev.filter((_, i) => i !== idx))} />
+              )}
+              {tab === 'settings' && (
+                <SettingsScreen config={config} setConfig={setConfig} />
+              )}
+              <TabBar tab={tab} setTab={setTab} hasProgram={!!program} />
+            </div>
+          );
+        }
+
+        // ==================== HOME SCREEN ====================
+        
+        function HomeScreen({ config, setConfig, onGenerate }) {
+          const isValid = config.experience && config.days && config.time && config.programType;
+          
+          return (
+            <div className="content-with-tabs px-4 pt-8 pb-32 max-w-2xl mx-auto">
+              <div className="text-center mb-10">
+                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl ring-premium overflow-hidden">
+                  <img src="logo.jpg" alt="TrainIQ" className="w-full h-full object-cover" />
+                </div>
+                <h1 className="font-display text-5xl font-bold mb-1 premium-gradient bg-clip-text text-transparent">
+                  TRAINIQ
+                </h1>
+                <p className="text-gray-500 text-xs font-semibold tracking-wider">EVIDENCE-BASED TRAINING</p>
+              </div>
+
+              <div className="mb-6 rounded-2xl overflow-hidden ring-premium">
+                <div className="relative">
+                  <img src="hero.jpg" alt="TrainIQ Hero" className="w-full h-44 object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent"></div>
+                  <div className="absolute bottom-3 left-4 right-4">
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold tracking-wider text-gray-300">PREMIUM PROGRAMMING</div>
+                        <div className="text-lg font-semibold">Built for progression, not randomness.</div>
+                      </div>
+                      <div className="hidden sm:flex items-center gap-2">
+                        <div className="px-3 py-1 rounded-full glass text-[11px] font-bold tracking-wider text-gray-200">RIR</div>
+                        <div className="px-3 py-1 rounded-full glass text-[11px] font-bold tracking-wider text-gray-200">DELoads</div>
+                        <div className="px-3 py-1 rounded-full glass text-[11px] font-bold tracking-wider text-gray-200">PERIODIZATION</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-2 tracking-wide">EXPERIENCE LEVEL</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['Beginner', 'Intermediate', 'Advanced'].map(lvl => (
+                      <button key={lvl} onClick={() => setConfig({...config, experience: lvl})}
+                        className={"p-3 rounded-xl font-semibold text-sm transition btn-touch " +
+                          (config.experience === lvl ? "premium-gradient text-white shadow-lg" : "glass text-gray-300")}>
+                        {lvl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-2 tracking-wide">TRAINING DAYS</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {['3', '4', '5', '6'].map(d => (
+                      <button key={d} onClick={() => setConfig({...config, days: d})}
+                        className={"p-4 rounded-xl font-bold text-2xl transition btn-touch " +
+                          (config.days === d ? "premium-gradient text-white shadow-lg" : "glass text-gray-300")}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-2 tracking-wide">SESSION LENGTH</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['45min', '60min', '75min'].map(t => (
+                      <button key={t} onClick={() => setConfig({...config, time: t})}
+                        className={"p-3 rounded-xl font-semibold transition btn-touch " +
+                          (config.time === t ? "premium-gradient text-white shadow-lg" : "glass text-gray-300")}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-2 tracking-wide">PROGRAM TYPE</label>
+                  {/* Premium select: improve dropdown legibility across browsers (incl. iOS) */}
+                  <div className="relative">
+                    <select
+                      value={config.programType}
+                      onChange={(e) => setConfig({...config, programType: e.target.value})}
+                      className="w-full p-4 pr-12 rounded-xl glass bg-black/40 text-white font-semibold border border-white/10 outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
+                    >
+                      <option value="" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Select Program Type</option>
+                      <option value="Hypertrophy" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Hypertrophy</option>
+                      <option value="Strength" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Strength</option>
+                      <option value="Powerbuilding" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Powerbuilding</option>
+                      <option value="Minimalist" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Minimalist</option>
+                    </select>
+                    <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between p-4 rounded-xl glass">
+                  <span className="font-semibold text-sm">SUPERSETS</span>
+                  <button onClick={() => setConfig({...config, supersets: !config.supersets})}
+                    className={"w-14 h-8 rounded-full transition " + (config.supersets ? "bg-orange-500" : "bg-gray-700")}>
+                    <div className={"w-6 h-6 rounded-full bg-white transition-transform " + (config.supersets ? "translate-x-7" : "translate-x-1")}></div>
+                  </button>
+                </div>
+                
+                <button onClick={onGenerate} disabled={!isValid}
+                  className={"w-full p-5 rounded-xl font-display font-bold text-lg transition btn-touch " +
+                    (isValid ? "premium-gradient text-white shadow-xl" : "glass text-gray-600 cursor-not-allowed")}>
+                  GENERATE PROGRAM
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        // ==================== WORKOUTS SCREEN ====================
+        
+        function WorkoutsScreen({ program, onSave }) {
+          const [week, setWeek] = useState(1);
+          const currentWeek = program.weeks[week - 1];
+          
+          return (
+            <div className="content-with-tabs">
+              <div className="sticky top-0 bg-black/95 backdrop-blur-lg border-b border-white/10 pb-3 z-10">
+                <div className="px-4 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h2 className="font-display font-bold text-lg">WEEK {week} OF 12</h2>
+                      <p className="text-xs text-gray-400 mt-0.5">{currentWeek.phase} Phase</p>
+                    </div>
+                    <button onClick={onSave} 
+                      className="px-4 py-2 rounded-lg bg-blue-500 text-white text-xs font-bold">
+                      SAVE
+                    </button>
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-2">
+                    {program.weeks.map(w => (
+                      <button key={w.number} onClick={() => setWeek(w.number)}
+                        className={"px-3 py-2 rounded-lg font-bold text-sm whitespace-nowrap transition " +
+                          (week === w.number ? "premium-gradient text-white" :
+                           w.deload ? "bg-yellow-500/20 text-yellow-400" : "glass text-gray-400")}>
+                        {w.deload ? `W${w.number} ↓` : `W${w.number}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="px-4 py-4 space-y-3">
+                {currentWeek.workouts.map((workout, i) => (
+                  <WorkoutCard key={i} workout={workout} />
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        // ==================== WORKOUT CARD ====================
+        
+        function WorkoutCard({ workout }) {
+          const [open, setOpen] = useState(false);
+          const [exercises, setExercises] = useState(() => (workout.exercises || []).map(ex => ({ ...ex })));
+	          const [swapState, setSwapState] = useState({ open: false, index: null, options: [], title: '', anchor: null });
+
+	          const openSwap = (ex, index, evt) => {
+	            const opts = getAlternativesForExercise(ex.originalName || ex.name, { role: ex.role || 'accessory' });
+	            // Anchor the chooser close to the clicked button so users don't have to scroll.
+	            let anchor = null;
+	            try {
+	              const rect = evt?.currentTarget?.getBoundingClientRect?.();
+	              if (rect) {
+	                anchor = { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height };
+	              }
+	            } catch (e) {
+	              anchor = null;
+	            }
+	            setSwapState({
+	              open: true,
+	              index,
+	              options: opts,
+	              title: ex.originalName ? `${ex.name} (alt)` : ex.name,
+	              anchor
+	            });
+	          };
+
+          const applySwap = (chosen) => {
+            setExercises(prev => {
+              if (!Array.isArray(prev)) return prev;
+              const idx = swapState.index;
+              if (idx === null || idx === undefined || !prev[idx]) return prev;
+              const current = prev[idx];
+              const originalName = current.originalName || current.name;
+              const updated = {
+                ...current,
+                name: chosen.name,
+                originalName,
+                // Keep stimulus tags available for future features
+                tags: getExerciseTags(chosen.name) || current.tags || null
+              };
+              const out = prev.slice();
+              out[idx] = updated;
+              return out;
+            });
+	            setSwapState({ open: false, index: null, options: [], title: '', anchor: null });
+          };
+
+	          const closeSwap = () => setSwapState({ open: false, index: null, options: [], title: '', anchor: null });
+          
+          return (
+            <div className="glass rounded-xl overflow-hidden">
+              <button onClick={() => setOpen(!open)}
+                className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition btn-touch">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-lg premium-gradient flex items-center justify-center font-display font-bold text-sm">
+                    D{workout.dayNumber}
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-bold text-sm">{workout.dayType} Day</h3>
+                    <p className="text-xs text-gray-400">{exercises.length} exercises</p>
+                  </div>
+                </div>
+                <span className={"transition text-orange-400 " + (open ? "rotate-180" : "")}>▼</span>
+              </button>
+              
+              {open && (
+                <div className="px-4 pb-4 space-y-2">
+                  {(() => {
+  const roleLabel = (role) => {
+    if (role === 'main') return { text: 'MAIN LIFT', cls: 'bg-orange-500/20 text-orange-300' };
+    if (role === 'secondary') return { text: 'SECONDARY LIFT', cls: 'bg-blue-500/20 text-blue-300' };
+    return { text: 'ACCESSORY', cls: 'bg-gray-500/20 text-gray-300' };
+  };
+
+  const ExerciseCard = ({ ex, index, showRest = true, ssOrder = null, canSwap = true }) => {
+    const role = roleLabel(ex.role);
+    return (
+      <div className="p-3 rounded-lg bg-black/50 border border-white/5">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="font-semibold text-sm">{ex.name}</h4>
+              {canSwap && (
+	                <button
+	                  onClick={(e) => openSwap(ex, index, e)}
+                  className={(ex.role === 'main' || ex.role === 'secondary'
+                    ? 'text-orange-200 border-orange-500/35 hover:bg-orange-500/10 '
+                    : 'text-gray-200 border-white/15 hover:bg-white/10 ') +
+                    'px-2 py-1 rounded-md border bg-white/5 text-[11px] font-bold btn-touch'}
+                  title="Choose a similar alternate exercise"
+                >
+                  Change
+                </button>
+              )}
+            </div>
+            {ex.originalName && (
+              <div className="text-[11px] text-gray-500 mt-0.5">
+                Original: <span className="text-gray-300 font-semibold">{ex.originalName}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {ssOrder && (
+              <span className="px-2 py-1 bg-purple-500/25 text-purple-200 rounded font-bold text-[11px]">
+                {ssOrder}
+              </span>
+            )}
+            <span className={`px-2 py-1 rounded font-bold text-[11px] ${role.cls}`}>{role.text}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5 text-xs mb-3">
+          <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded font-bold">
+            <span className="opacity-75 font-extrabold tracking-wider mr-1">SETS</span>
+            {ex.sets} × {ex.reps[0]}-{ex.reps[1]}
+          </span>
+
+          {showRest && (
+            <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded font-bold">
+              <span className="opacity-75 font-extrabold tracking-wider mr-1">REST</span>
+              {ex.rest}
+            </span>
+          )}
+
+          <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded font-bold">
+            <span className="opacity-75 font-extrabold tracking-wider mr-1">EFFORT</span>
+            {ex.rir} RIR
+          </span>
+
+          {ex.weight && (
+            <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded font-bold">
+              ~{ex.weight} lbs
+            </span>
+          )}
+        </div>
+
+        <div className="text-[11px] text-gray-500 mb-3 -mt-1">
+          Target effort: finish each set with about <span className="font-bold text-gray-300">{ex.rir}</span> reps in reserve (RIR).
+        </div>
+
+        <div className="space-y-2">
+          {Array.from({length: ex.sets}).map((_, setIdx) => (
+            <div key={setIdx} className="flex items-center gap-2 p-2 rounded bg-black/30">
+              <span className="text-xs font-bold text-gray-500 w-12">Set {setIdx + 1}</span>
+              <input type="number" placeholder="lbs"
+                className="w-20 sm:w-24 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
+              />
+              <span className="text-xs text-gray-600">×</span>
+              <input type="number" placeholder="reps"
+                className="w-20 sm:w-24 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
+              />
+              <input type="number" placeholder="RIR" min="0" max="6"
+                className="w-16 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const items = [];
+  const exs = exercises || [];
+  for (let i = 0; i < exs.length; i++) {
+    const ex = exs[i];
+    if (!ex) continue;
+
+    // Skip A2 entries; they render inside the Superset group.
+    if (ex.superset && ex.superset.position === 2) continue;
+
+    if (ex.superset && ex.superset.position === 1) {
+      const group = ex.superset.group;
+      const partner = exs[i + 1];
+      const hasPartner = partner && partner.superset && partner.superset.group === group;
+
+      const between = ex.superset.betweenRest || '0-30s';
+      const post = ex.superset.postRest || '60-120s';
+
+      items.push(
+        <div key={`ss-${group}-${i}`} className="p-3 rounded-xl bg-black/40 border border-white/10">
+          <div className="flex flex-col gap-1 mb-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-bold tracking-widest text-purple-200">SUPERSET {group}</div>
+              <span className="px-2 py-1 bg-purple-500/20 text-purple-300 rounded font-bold text-[11px]">
+                No rest (or {between}) between
+              </span>
+            </div>
+            {hasPartner ? (
+              <div className="text-xs text-gray-300">
+                Do <span className="font-bold text-white">{ex.name}</span> → <span className="font-bold text-white">{partner.name}</span>, then rest <span className="font-bold text-white">{post}</span>.
+              </div>
+            ) : (
+              <div className="text-xs text-gray-400">
+                Superset enabled, but partner exercise not found for this group.
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <ExerciseCard key={`ex-${i}`} ex={ex} index={i} showRest={false} ssOrder={`${group}1`} />
+            {hasPartner && <ExerciseCard key={`ex-${i+1}`} ex={partner} index={i+1} showRest={false} ssOrder={`${group}2`} />}
+          </div>
+
+          <div className="mt-2 text-xs text-gray-400">
+            Rest <span className="font-bold text-gray-200">{post}</span> after completing both exercises.
+          </div>
+        </div>
+      );
+
+      continue;
+    }
+
+    // Normal (non-superset) exercise card.
+    items.push(<ExerciseCard key={`ex-${i}`} ex={ex} index={i} showRest={true} />);
+  }
+
+  return items;
+})()}
+                </div>
+              )}
+
+	              {swapState.open && (() => {
+	                const isMobile = (typeof window !== 'undefined') ? window.innerWidth < 640 : true;
+	                const vh = (typeof window !== 'undefined') ? window.innerHeight : 800;
+	                const anchorBottom = swapState.anchor?.bottom ?? 80;
+	                // Keep the panel close to the clicked lift while staying on-screen.
+	                const top = Math.min(Math.max(anchorBottom + 10, 12), Math.max(12, vh - 520));
+	
+	                return (
+	                <div className={"fixed inset-0 z-[60] flex justify-center " + (isMobile ? "items-end" : "items-start") }>
+	                  <button className="absolute inset-0 bg-black/70" onClick={closeSwap} aria-label="Close" />
+	                  <div
+	                    className={
+	                      (isMobile
+	                        ? 'relative w-full max-w-md rounded-t-2xl border-t '
+	                        : 'fixed w-full max-w-md rounded-2xl border ')
+	                      + 'glass border-white/10 p-4 pb-6'
+	                    }
+	                    style={isMobile ? undefined : { top: top + 'px', left: '50%', transform: 'translateX(-50%)' }}
+	                  >
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <div className="font-display text-sm tracking-widest text-gray-300">ALTERNATE EXERCISES</div>
+                        <div className="text-sm font-semibold mt-1">{swapState.title}</div>
+                        <div className="text-xs text-gray-400 mt-1">Similar stimulus • Same muscle focus</div>
+                      </div>
+                      <button onClick={closeSwap} className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold btn-touch">Close</button>
+                    </div>
+
+                    {swapState.options.length === 0 ? (
+                      <div className="p-3 rounded-lg bg-black/40 border border-white/10 text-sm text-gray-300">
+                        No close matches found in the database for this exercise.
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+                        {swapState.options.map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => applySwap(opt)}
+                            className="w-full text-left p-3 rounded-xl bg-black/40 hover:bg-white/5 border border-white/10 btn-touch"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-semibold text-sm">{opt.name}</div>
+                              <span className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[11px] font-bold text-gray-200">
+                                {String(opt.equipment || '').toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              {opt.pattern.replace('_', ' ')} • {opt.primeMover} • {opt.type}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="mt-4 text-[11px] text-gray-500">
+                      Substitutions preserve movement pattern, prime mover, and exercise type to keep programming evidence-based.
+                    </div>
+	                  </div>
+	                </div>
+	                );
+	              })()}
+            </div>
+          );
+        }
+
+        // ==================== HISTORY SCREEN ====================
+        
+        function HistoryScreen({ history, onDelete }) {
+          if (history.length === 0) {
+            return (
+              <div className="min-h-screen flex items-center justify-center content-with-tabs px-4">
+                <div className="text-center">
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-2xl glass flex items-center justify-center">
+                    <span className="text-4xl">📜</span>
+                  </div>
+                  <h3 className="text-xl font-display font-bold text-gray-400 mb-2">NO HISTORY</h3>
+                  <p className="text-gray-500 text-sm">Saved programs appear here</p>
+                </div>
+              </div>
+            );
+          }
+          
+          return (
+            <div className="content-with-tabs px-4 py-6">
+              <h2 className="text-2xl font-display font-bold mb-4">HISTORY</h2>
+              <div className="space-y-3">
+                {history.map((prog, idx) => (
+                  <div key={idx} className="p-4 rounded-xl glass">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h3 className="font-bold text-sm">{prog.config.programType}</h3>
+                        <p className="text-xs text-gray-400">{new Date(prog.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <button onClick={() => onDelete(idx)} className="text-red-400 text-xl">×</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        // ==================== PROFILE (SETTINGS) SCREEN ====================
+        
+        function SettingsScreen({ config, setConfig }) {
+          const [showProfileLinkInfo, setShowProfileLinkInfo] = React.useState(false);
+
+          return (
+            <div className="content-with-tabs px-4 py-6">
+              <h2 className="text-2xl font-display font-bold mb-1">PROFILE</h2>
+              <p className="text-xs text-gray-500 mb-6">Preferences & lifting numbers</p>
+              
+              <div className="space-y-5">
+                <div className="p-5 rounded-2xl glass">
+                  <h3 className="font-bold mb-4 text-sm text-gray-400">ONE-REP MAXES</h3>
+                  <div className="space-y-3">
+                    {[
+                      {key: 'chest', label: 'Bench Press'},
+                      {key: 'shoulders', label: 'Shoulder Press'},
+                      {key: 'lats', label: 'Pull-up'},
+                      {key: 'quads', label: 'Squat'},
+                      {key: 'hamstrings', label: 'Deadlift'}
+                    ].map(({key, label}) => (
+                      <div key={key} className="flex justify-between items-center">
+                        <span className="text-sm">{label}:</span>
+                        <input type="number" value={config.oneRMs[key]} placeholder="0"
+                          onChange={(e) => setConfig({...config, oneRMs: {...config.oneRMs, [key]: e.target.value}})}
+                          className="w-20 p-2 rounded bg-black/50 border border-white/10 text-white text-center outline-none focus:border-orange-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                
+                <div className="p-5 rounded-2xl glass">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-bold text-sm text-gray-400">PROFILE LINK</h3>
+                    <button
+                      type="button"
+                      aria-label="How to use your profile link"
+                      onClick={() => setShowProfileLinkInfo(true)}
+                      className="p-2 -m-2 rounded-lg text-gray-400 hover:text-white transition btn-touch"
+                    >
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 16v-4" />
+                        <path d="M12 8h.01" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3">Share this link to keep this profile separate on this device.</p>
+                  <div className="flex gap-2">
+                    <input readOnly value={(() => {
+                      const pid = ensureProfileId();
+                      const base = window.location.origin + window.location.pathname;
+                      return `${base}#/u/${pid}`;
+                    })()} className="flex-1 p-2 rounded bg-black/50 border border-white/10 text-white text-xs outline-none" />
+                    <button onClick={() => {
+                      const pid = ensureProfileId();
+                      const base = window.location.origin + window.location.pathname;
+                      const link = `${base}#/u/${pid}`;
+                      navigator.clipboard?.writeText(link);
+                      alert('Profile link copied');
+                    }} className="px-3 py-2 rounded-lg premium-gradient text-white text-xs font-bold btn-touch">
+                      COPY
+                    </button>
+                  </div>
+                </div>
+
+                {showProfileLinkInfo && (
+                  <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+                    <button
+                      type="button"
+                      aria-label="Close"
+                      onClick={() => setShowProfileLinkInfo(false)}
+                      className="absolute inset-0 bg-black/70"
+                    />
+
+                    <div className="relative w-full max-w-lg rounded-2xl glass border border-white/10 shadow-2xl overflow-hidden">
+                      <div className="p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h3 className="text-lg font-display font-bold">How to use your Profile Link</h3>
+                            <p className="text-xs text-gray-400 mt-1">Keep your workouts separate on this device.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowProfileLinkInfo(false)}
+                            className="p-2 -m-2 rounded-lg text-gray-400 hover:text-white transition btn-touch"
+                            aria-label="Close"
+                          >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M18 6 6 18" />
+                              <path d="M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        <div className="mt-4 text-sm text-gray-200 space-y-3">
+                          <p className="text-gray-300">Your Profile Link keeps your workouts and programs separate from other users on this device.</p>
+
+                          <div>
+                            <div className="text-xs font-bold text-gray-400 mb-1">How it works</div>
+                            <ul className="list-disc pl-5 space-y-1 text-gray-300">
+                              <li>Always open the app using this exact link to access your data.</li>
+                              <li>Save or bookmark this link so you don’t lose it.</li>
+                              <li>Each person should use their own Profile Link.</li>
+                            </ul>
+                          </div>
+
+                          <div>
+                            <div className="text-xs font-bold text-gray-400 mb-1">Sharing a device?</div>
+                            <ul className="list-disc pl-5 space-y-1 text-gray-300">
+                              <li>Paste a different Profile Link into the browser to switch users.</li>
+                            </ul>
+                          </div>
+
+                          <div>
+                            <div className="text-xs font-bold text-gray-400 mb-1">Important</div>
+                            <ul className="list-disc pl-5 space-y-1 text-gray-300">
+                              <li>Opening the app without a Profile Link creates a new profile.</li>
+                              <li>Data is stored on this device only (no cloud sync).</li>
+                            </ul>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setShowProfileLinkInfo(false)}
+                            className="px-4 py-2 rounded-lg premium-gradient text-white text-sm font-bold btn-touch"
+                          >
+                            Got it
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <button onClick={() => { if (confirm('Clear data for this profile only?')) { storage.clearProfile(); window.location.reload(); } }}
+                  className="w-full p-4 rounded-xl bg-red-500/20 text-red-400 font-bold transition btn-touch">
+                  CLEAR ALL DATA
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        // ==================== TAB BAR ====================
+        
+        function TabBar({ tab, setTab, hasProgram }) {
+          const Icon = ({ name, active }) => {
+            const common = "w-5 h-5";
+            const stroke = active ? "currentColor" : "currentColor";
+
+            if (name === 'home') {
+              return (
+                <svg className={common} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 10.5 12 3l9 7.5" />
+                  <path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10" />
+                </svg>
+              );
+            }
+            if (name === 'workouts') {
+              // Minimal barbell
+              return (
+                <svg className={common} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 9v6" />
+                  <path d="M8.5 8v8" />
+                  <path d="M15.5 8v8" />
+                  <path d="M18 9v6" />
+                  <path d="M9.5 12h5" />
+                  <path d="M3.5 10.5v3" />
+                  <path d="M20.5 10.5v3" />
+                </svg>
+              );
+            }
+            if (name === 'history') {
+              // Floppy disk
+              return (
+                <svg className={common} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 3h12l3 3v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+                  <path d="M8 3v6h8V3" />
+                  <path d="M9 17h6" />
+                </svg>
+              );
+            }
+            if (name === 'profile') {
+              // Person / profile
+              return (
+                <svg className={common} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21a8 8 0 0 0-16 0" />
+                  <circle cx="12" cy="8" r="4" />
+                </svg>
+              );
+            }
+            // settings
+            return (
+              <svg className={common} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" />
+                <path d="M19.4 15a7.9 7.9 0 0 0 .1-1l2-1.2-2-3.4-2.3.7a7.7 7.7 0 0 0-1.7-1l-.4-2.4h-4l-.4 2.4a7.7 7.7 0 0 0-1.7 1l-2.3-.7-2 3.4 2 1.2a7.9 7.9 0 0 0 .1 1 7.9 7.9 0 0 0-.1 1l-2 1.2 2 3.4 2.3-.7a7.7 7.7 0 0 0 1.7 1l.4 2.4h4l.4-2.4a7.7 7.7 0 0 0 1.7-1l2.3.7 2-3.4-2-1.2a7.9 7.9 0 0 0-.1-1z" />
+              </svg>
+            );
+          };
+
+          const tabs = [
+            { id: 'home', label: 'Home', icon: 'home' },
+            { id: 'workouts', label: 'Workouts', icon: 'workouts', disabled: !hasProgram },
+            { id: 'history', label: 'History', icon: 'history' },
+            // Keep the underlying screen as "settings" but present it as a premium "Profile" tab.
+            { id: 'settings', label: 'Profile', icon: 'profile' }
+          ];
+          
+          return (
+            <div className="tab-bar px-3 pb-[calc(10px+env(safe-area-inset-bottom))] pt-3">
+              <div className="max-w-2xl mx-auto rounded-2xl glass border border-white/10">
+                <div className="px-2 py-2 flex justify-around">
+                  {tabs.map(t => {
+                    const active = tab === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => !t.disabled && setTab(t.id)}
+                        disabled={t.disabled}
+                        className={
+                          "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition btn-touch " +
+                          (active
+                            ? "text-orange-400"
+                            : t.disabled
+                              ? "text-gray-800"
+                              : "text-gray-500 hover:text-gray-300")
+                        }
+                      >
+                        <div className={"w-9 h-9 rounded-xl flex items-center justify-center " + (active ? "bg-white/5 ring-premium" : "")}
+                          aria-hidden="true">
+                          <Icon name={t.icon} active={active} />
+                        </div>
+                        <span className="text-[10px] font-bold tracking-wider">{t.label.toUpperCase()}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        ensureProfileId();
+        ReactDOM.render(<TrainIQ />, document.getElementById('root'));
+    </script>
+</body>
+</html>
