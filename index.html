@@ -392,46 +392,7 @@
           const targetRepsToFailure = avgRep + rir;
           const percentage = 1.0278 - (0.0278 * targetRepsToFailure);
           return roundWeight(oneRM * percentage);
-        
-
-        function getOneRMForExercise(ex, oneRMs) {
-          if (!oneRMs || !ex) return null;
-
-          // 1) explicit key if present
-          if (ex.oneRMKey && oneRMs[ex.oneRMKey]) return parseFloat(oneRMs[ex.oneRMKey]);
-
-          // 2) use primary mapping from exercise DB if it matches available keys
-          if (ex.primary && oneRMs[ex.primary]) return parseFloat(oneRMs[ex.primary]);
-
-          // 3) infer from exercise name (robust across program types / naming variants)
-          const n = (ex.name || "").toLowerCase();
-
-          // Bench / chest pressing
-          if (n.includes("bench press") || (n.includes("bench") && n.includes("press"))) return parseFloat(oneRMs.chest || 0) || null;
-
-          // Shoulder / overhead press
-          if (n.includes("shoulder press") || n.includes("overhead press") || (n.includes("press") && n.includes("overhead"))) {
-            return parseFloat(oneRMs.shoulders || 0) || null;
-          }
-
-          // Pull-ups / chin-ups
-          if (n.includes("pull-up") || n.includes("pull up") || n.includes("chin-up") || n.includes("chin up")) {
-            return parseFloat(oneRMs.lats || 0) || null;
-          }
-
-          // Squat patterns
-          if (n.includes("back squat") || n.includes("front squat") || (n.includes("squat") && !n.includes("split"))) {
-            return parseFloat(oneRMs.quads || 0) || null;
-          }
-
-          // Deadlift patterns (treat RDL as hamstrings cap; still okay if user wants)
-          if (n.includes("deadlift") || n.includes("rdl") || n.includes("romanian deadlift")) {
-            return parseFloat(oneRMs.hamstrings || 0) || null;
-          }
-
-          return null;
         }
-}
 
         // NSCA Training Load Chart (Landers, adapted by NSCA): %1RM by reps-to-failure.
         // Source: NSCA Training Load Chart PDF.
@@ -471,7 +432,49 @@
 
         function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
-        function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role, phase) {
+        
+        function oneRMKeyForExercise(ex) {
+          // Prefer explicit key if present
+          if (ex?.oneRMKey) return ex.oneRMKey;
+
+          // If primary matches a 1RM key, use it.
+          const p = ex?.primary;
+          if (p && (p === 'chest' || p === 'shoulders' || p === 'lats' || p === 'quads' || p === 'hamstrings')) return p;
+
+          const n = (ex?.name || '').toLowerCase();
+
+          // Chest: bench variations
+          if (n.includes('bench') && n.includes('press')) return 'chest';
+          if (n.includes('chest press')) return 'chest';
+
+          // Shoulders: overhead/shoulder press
+          if (n.includes('overhead') && n.includes('press')) return 'shoulders';
+          if (n.includes('shoulder') && n.includes('press')) return 'shoulders';
+          // Common shorthand
+          if (n === 'ohp' || n.includes('military press')) return 'shoulders';
+
+          // Lats/upper back: pull-ups/chins/rows/pulldowns (for 1RM we treat as "lats" key)
+          if (n.includes('pull-up') || n.includes('pull up') || n.includes('chin-up') || n.includes('chin up')) return 'lats';
+          if (n.includes('lat pulldown') || n.includes('pull-down') || n.includes('pulldown')) return 'lats';
+          if (n.includes('row')) return 'lats';
+
+          // Quads: squat patterns
+          if (n.includes('squat')) return 'quads';
+          if (n.includes('leg press')) return 'quads';
+
+          // Hamstrings/posterior: deadlift patterns
+          if (n.includes('deadlift') || n.includes('rdl') || n.includes('romanian')) return 'hamstrings';
+          if (n.includes('hip thrust')) return 'hamstrings';
+
+          return null;
+        }
+
+        function getOneRMForExercise(ex, oneRMs) {
+          const key = oneRMKeyForExercise(ex);
+          return key ? oneRMs?.[key] : null;
+        }
+
+function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role, phase) {
           if (!oneRM) return null;
 
           const minRep = repsRange?.[0] ?? 5;
@@ -635,25 +638,24 @@
                   reps,
                   rir,
                   rest: getRest(reps[0], ex.type, programType),
-                  weight: (getOneRMForExercise(ex, oneRMs) ? calc1RMWeight(getOneRMForExercise(ex, oneRMs), reps[0], reps[1], rir) : null)
+                  weight: getOneRMForExercise(ex, oneRMs) ? calc1RMWeight(getOneRMForExercise(ex, oneRMs), reps[0], reps[1], rir) : null
                 });
               });
               
-              // Label lifts for clearer coaching cues (compound-aware).
-              // We assign roles based on the first compound lifts in the session so it works
-              // even if the workout starts with a warm-up/accessory.
-              const wantsSecondary = (programType === 'Strength' || programType === 'Powerbuilding');
-              let compoundSeen = 0;
-              exercises.forEach((ex) => {
+              // Label lifts for clearer coaching cues (evidence-based nomenclature).
+              // Updated: pick the first (and second) COMPOUND lifts as main/secondary, not just array position.
+              const compoundIdxs = exercises
+                .map((ex, i) => (ex && ex.type === 'compound') ? i : null)
+                .filter(i => i !== null);
+
+              const mainIdx = compoundIdxs[0] ?? null;
+              const secondaryIdx = ((programType === 'Strength' || programType === 'Powerbuilding') ? (compoundIdxs[1] ?? null) : null);
+
+              exercises.forEach((ex, i) => {
                 if (!ex) return;
-                if (ex.type === 'compound') {
-                  compoundSeen += 1;
-                  if (compoundSeen === 1) ex.role = 'main';
-                  else if (wantsSecondary && compoundSeen === 2) ex.role = 'secondary';
-                  else ex.role = 'accessory';
-                } else {
-                  ex.role = 'accessory';
-                }
+                ex.role = 'accessory';
+                if (i === mainIdx) ex.role = 'main';
+                else if (secondaryIdx !== null && i === secondaryIdx) ex.role = 'secondary';
               });
 
 // Apply supersets if user enabled them. This tags only non-main lifts.
