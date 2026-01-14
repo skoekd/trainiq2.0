@@ -602,9 +602,177 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
          * Note: Full closed-loop (logbook → next prescription) requires workout logging UI; this generator
          * produces a robust 12-week plan given current UI inputs.
          */
-        function generateProgram(config) {
+        
+          // ------------------------------------------------------------
+          // PROGRAM PROFILES (programType-driven split + slots + scoring)
+          // ------------------------------------------------------------
+          const PROGRAM_PROFILES = (() => {
+            const DEFAULT_SPLITS = {
+              3: ['Full','Full','Full'],
+              4: ['Upper','Lower','Upper','Lower'],
+              5: ['Upper','Lower','Upper','Lower','Upper'],
+              6: ['Push','Pull','Legs','Push','Pull','Legs']
+            };
+
+            const HYPERTROPHY_SLOTS = {
+              Upper: [
+                { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound' },
+                { pool:'back_horizontal',  fallback:'horizontal_pull', role:'main', type:'compound' },
+                { pool:'shoulders_press',  fallback:'vertical_push',   role:'secondary', type:'compound' },
+                { pool:'back_vertical',    fallback:'vertical_pull',   role:'secondary', type:'compound' },
+                { pool:'shoulders_lateral',fallback:'shoulders_lateral',role:'accessory', type:'isolation' },
+                { pool:'arms_biceps',      fallback:'arms_biceps',     role:'accessory', type:'isolation' },
+                { pool:'arms_triceps',     fallback:'arms_triceps',    role:'accessory', type:'isolation' }
+              ],
+              Lower: [
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound' },
+                { pool:'legs_hinge',       fallback:'hinge_pattern',   role:'main', type:'compound' },
+                { pool:'legs_quad_isolation',      fallback:'legs_quad_isolation',      role:'accessory', type:'isolation' },
+                { pool:'legs_hamstring_isolation', fallback:'legs_hamstring_isolation', role:'accessory', type:'isolation' },
+                { pool:'legs_calves',      fallback:'legs_calves',     role:'accessory', type:'isolation' },
+                { pool:'core_antiextension', fallback:'core_antirotation', role:'accessory', type:'isolation', optional:true }
+              ],
+              Push: [
+                { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound' },
+                { pool:'shoulders_press',  fallback:'vertical_push',   role:'secondary', type:'compound' },
+                { pool:'chest_isolation',  fallback:'isolation',       role:'accessory', type:'isolation' },
+                { pool:'shoulders_lateral',fallback:'shoulders_lateral',role:'accessory', type:'isolation' },
+                { pool:'arms_triceps',     fallback:'arms_triceps',    role:'accessory', type:'isolation' }
+              ],
+              Pull: [
+                { pool:'back_vertical',    fallback:'vertical_pull',   role:'main', type:'compound' },
+                { pool:'back_horizontal',  fallback:'horizontal_pull', role:'secondary', type:'compound' },
+                { pool:'shoulders_rear',   fallback:'shoulders_rear',  role:'accessory', type:'isolation' },
+                { pool:'arms_biceps',      fallback:'arms_biceps',     role:'accessory', type:'isolation' }
+              ],
+              Legs: [
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound' },
+                { pool:'legs_hinge',       fallback:'hinge_pattern',   role:'main', type:'compound' },
+                { pool:'legs_quad_isolation',      fallback:'legs_quad_isolation',      role:'accessory', type:'isolation' },
+                { pool:'legs_hamstring_isolation', fallback:'legs_hamstring_isolation', role:'accessory', type:'isolation' },
+                { pool:'legs_calves',      fallback:'legs_calves',     role:'accessory', type:'isolation' },
+                { pool:'core_antirotation', fallback:'core_antiextension', role:'accessory', type:'isolation', optional:true }
+              ],
+              Full: [
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound' },
+                { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound' },
+                { pool:'back_horizontal',  fallback:'horizontal_pull', role:'secondary', type:'compound' },
+                { pool:'legs_hinge',       fallback:'hinge_pattern',   role:'secondary', type:'compound' },
+                { pool:'back_vertical',    fallback:'vertical_pull',   role:'accessory', type:'compound', optional:true },
+                { pool:'core_antirotation', fallback:'core_antiextension', role:'accessory', type:'isolation' }
+              ]
+            };
+
+            const STRENGTH_SLOTS = {
+              Upper: [
+                { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound', requireMainLiftKey:'bench' },
+                { pool:'back_horizontal',  fallback:'horizontal_pull', role:'main', type:'compound' },
+                { pool:'shoulders_press',  fallback:'vertical_push',   role:'secondary', type:'compound', preferMainLiftKey:'ohp' },
+                { pool:'back_vertical',    fallback:'vertical_pull',   role:'secondary', type:'compound' },
+                { pool:'arms_triceps',     fallback:'arms_triceps',    role:'accessory', type:'isolation' },
+                { pool:'shoulders_rear',   fallback:'shoulders_rear',  role:'accessory', type:'isolation' },
+                { pool:'core_antirotation',fallback:'core_antiextension', role:'accessory', type:'isolation', optional:true }
+              ],
+              Lower: [
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound', requireMainLiftKey:'squat' },
+                { pool:'legs_hinge',       fallback:'hinge_pattern',   role:'main', type:'compound', preferMainLiftKey:'deadlift' },
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'secondary', type:'compound', secondarySlot:true },
+                { pool:'legs_hamstring_isolation', fallback:'legs_hamstring_isolation', role:'accessory', type:'isolation' },
+                { pool:'core_antiextension', fallback:'core_antirotation', role:'accessory', type:'isolation' }
+              ],
+              Full: [
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound', requireMainLiftKey:'squat' },
+                { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound', requireMainLiftKey:'bench' },
+                { pool:'legs_hinge',       fallback:'hinge_pattern',   role:'secondary', type:'compound', preferMainLiftKey:'deadlift' },
+                { pool:'back_horizontal',  fallback:'horizontal_pull', role:'secondary', type:'compound' },
+                { pool:'core_antirotation',fallback:'core_antiextension', role:'accessory', type:'isolation' }
+              ],
+              Push: HYPERTROPHY_SLOTS.Push,
+              Pull: HYPERTROPHY_SLOTS.Pull,
+              Legs: HYPERTROPHY_SLOTS.Legs
+            };
+
+            const MINIMALIST_SLOTS = {
+              Upper: [
+                { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound' },
+                { pool:'back_horizontal',  fallback:'horizontal_pull', role:'main', type:'compound' },
+                { pool:'shoulders_lateral',fallback:'shoulders_lateral',role:'accessory', type:'isolation' },
+                { pool:'arms_triceps',     fallback:'arms_triceps',    role:'accessory', type:'isolation', supersetGroup:'A' },
+                { pool:'arms_biceps',      fallback:'arms_biceps',     role:'accessory', type:'isolation', supersetGroup:'A' }
+              ],
+              Lower: [
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound' },
+                { pool:'legs_hinge',       fallback:'hinge_pattern',   role:'main', type:'compound' },
+                { pool:'legs_calves',      fallback:'legs_calves',     role:'accessory', type:'isolation' },
+                { pool:'core_antirotation',fallback:'core_antiextension', role:'accessory', type:'isolation' }
+              ],
+              Full: [
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound' },
+                { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound' },
+                { pool:'back_vertical',    fallback:'vertical_pull',   role:'secondary', type:'compound' },
+                { pool:'legs_hinge',       fallback:'hinge_pattern',   role:'secondary', type:'compound' },
+                { pool:'core_antiextension', fallback:'core_antirotation', role:'accessory', type:'isolation' }
+              ],
+              Push: [
+                { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound' },
+                { pool:'shoulders_press',  fallback:'vertical_push',   role:'secondary', type:'compound' },
+                { pool:'arms_triceps',     fallback:'arms_triceps',    role:'accessory', type:'isolation' }
+              ],
+              Pull: [
+                { pool:'back_vertical',    fallback:'vertical_pull',   role:'main', type:'compound' },
+                { pool:'back_horizontal',  fallback:'horizontal_pull', role:'secondary', type:'compound' },
+                { pool:'arms_biceps',      fallback:'arms_biceps',     role:'accessory', type:'isolation' }
+              ],
+              Legs: [
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound' },
+                { pool:'legs_hinge',       fallback:'hinge_pattern',   role:'main', type:'compound' },
+                { pool:'core_antirotation',fallback:'core_antiextension', role:'accessory', type:'isolation' }
+              ]
+            };
+
+            function scoringFor(type) {
+              switch (type) {
+                case 'Strength':
+                  return { needW:0.55, stimW:0.20, romW:0.05, fatigueW:0.55, setupW:0.20, skillW:0.35, mainLiftBonus:0.55, preferMachine:-0.08, preferFreeWeight:0.12, stimulusToFatigueW:0.10 };
+                case 'Minimalist':
+                  return { needW:0.60, stimW:0.35, romW:0.10, fatigueW:0.30, setupW:0.40, skillW:0.15, mainLiftBonus:0.10, preferMachine:0.12, preferFreeWeight:0.00, stimulusToFatigueW:0.30 };
+                case 'Hypertrophy':
+                default:
+                  return { needW:0.75, stimW:0.35, romW:0.25, fatigueW:0.30, setupW:0.20, skillW:0.20, mainLiftBonus:0.15, preferMachine:0.10, preferFreeWeight:0.03, stimulusToFatigueW:0.22 };
+              }
+            }
+
+            const SPLIT_OVERRIDES = {
+              Strength: {
+                3: ['Full','Full','Full'],
+                4: ['Upper','Lower','Upper','Lower'],
+                5: ['Upper','Lower','Full','Upper','Lower'],
+                6: ['Upper','Lower','Upper','Lower','Full','Full']
+              },
+              Minimalist: {
+                3: ['Full','Full','Full'],
+                4: ['Upper','Lower','Upper','Lower'],
+                5: ['Upper','Lower','Full','Upper','Lower'],
+                6: ['Push','Pull','Legs','Full','Upper','Lower']
+              }
+            };
+
+            return {
+              Hypertrophy: { name:'Hypertrophy', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
+              Strength:    { name:'Strength',    splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Strength || {}) }, daySlots: STRENGTH_SLOTS, scoring: scoringFor('Strength') },
+              Minimalist:  { name:'Minimalist',  splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Minimalist || {}) }, daySlots: MINIMALIST_SLOTS, scoring: scoringFor('Minimalist') }
+            };
+          })();
+
+function generateProgram(config) {
           const { experience, days, programType, oneRMs } = config;
           const daysNum = parseInt(days);
+
+          // Program profile (drives split + slots + exercise scoring)
+          const profile = PROGRAM_PROFILES[programType] || PROGRAM_PROFILES.Hypertrophy;
+          const split = (profile.splitTemplates?.[daysNum]) || (PROGRAM_PROFILES.Hypertrophy.splitTemplates?.[daysNum]) || (PROGRAM_PROFILES.Hypertrophy.splitTemplates?.[4]);
+          const scoreW = profile.scoring || PROGRAM_PROFILES.Hypertrophy.scoring;
+
 
           // -------------------- Deterministic helpers --------------------
           const FATIGUE_NUM = { low: 1, medium: 2, high: 3, very_high: 4 };
@@ -634,10 +802,51 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
             return 'mid';
           }
 
+
+          // NEW: main-lift identity + stimulus-to-fatigue heuristic (used by program profiles)
+          function inferMainLiftKey(rawName, poolKey, equipment) {
+            const n = String(rawName || '').toLowerCase();
+            const p = String(poolKey || '').toLowerCase();
+            const e = String(equipment || '').toLowerCase();
+
+            const isBenchish = n.includes('bench') || (p.includes('chest_horizontal') && e.includes('barbell'));
+            const isSquatish = n.includes('squat') || (p.includes('legs_squat') && e.includes('barbell'));
+            const isDeadliftish = n.includes('deadlift') || (p.includes('legs_hinge') && e.includes('barbell'));
+            const isOHPish = n.includes('overhead') || n.includes('ohp') || (p.includes('shoulders_press') && e.includes('barbell'));
+
+            if (isBenchish) return 'bench';
+            if (isSquatish) return 'squat';
+            if (isDeadliftish) return 'deadlift';
+            if (isOHPish) return 'ohp';
+            return null;
+          }
+
+          function inferStimulusToFatigue(ex, fatigueNum, skillNum, setupNum) {
+            // Higher is better (rough heuristic for stimulus-to-fatigue / stimulus-to-time efficiency)
+            const eq = String(ex.equipment || '').toLowerCase();
+            const isMachine = eq.includes('machine') || eq.includes('cable');
+            const isBarbell = eq.includes('barbell');
+
+            let sf = 0.5;
+            if (isMachine) sf += 0.15;
+            if (isBarbell) sf -= 0.05;
+            sf += (3 - fatigueNum) * 0.08;
+            sf += (3 - skillNum) * 0.06;
+            sf += (3 - setupNum) * 0.05;
+            return clamp01(sf);
+          }
+
+
           function normalizeExercise(raw, poolKey) {
             const fatigueKey = String(raw.fatigue || '').toLowerCase().trim() || 'medium';
             const skillKey = String(raw.skill || '').toLowerCase().trim() || 'medium';
             const equipment = raw.equipment || 'unknown';
+
+            const fatigueNum = FATIGUE_NUM[fatigueKey] ?? 2;
+            const skillNum = SKILL_NUM[skillKey] ?? 2;
+            const setupNum = inferSetupCost(equipment);
+
+            const mainLiftKey = inferMainLiftKey(raw.name, poolKey, equipment);
 
             return {
               id: stableId(raw.name),
@@ -646,12 +855,19 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
               type: raw.type || 'compound',
               primary: raw.primary || raw.primeMover || raw.primaryMuscle || 'unknown',
               secondary: raw.secondary || [],
-              fatigueNum: FATIGUE_NUM[fatigueKey] ?? 2,
-              skillNum: SKILL_NUM[skillKey] ?? 2,
-              setupNum: inferSetupCost(equipment),
+              fatigueNum,
+              skillNum,
+              setupNum,
               equipment,
               repRange: raw.repRange || [8, 12],
               romBias: inferRomBias(raw.name, poolKey),
+
+              // Profile-aware metadata (used for programType-driven selection)
+              mainLiftKey,
+              isMainLift: !!mainLiftKey,
+              isMachine: String(equipment).toLowerCase().includes('machine') || String(equipment).toLowerCase().includes('cable'),
+              stimulusToFatigue: inferStimulusToFatigue({ equipment }, fatigueNum, skillNum, setupNum),
+
               substitutionGroup: poolKey // stimulus-equivalent family
             };
           }
@@ -665,61 +881,9 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           }
 
           // -------------------- Split templates --------------------
-          const splitTemplates = {
-            3: ['Full', 'Full', 'Full'],
-            4: ['Upper', 'Lower', 'Upper', 'Lower'],
-            5: ['Upper', 'Lower', 'Upper', 'Lower', 'Upper'], // hypertrophy-first friendly
-            6: ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs']
-          };
-          const split = splitTemplates[daysNum] || splitTemplates[4];
 
           // Day pattern “slots” (roles). Slots are satisfied via scoring solver.
-          const daySlots = {
-            Upper: [
-              { pool: 'chest_horizontal', fallback: 'chest_press', role: 'main',  type: 'compound' },
-              { pool: 'back_horizontal',  fallback: 'back_horizontal', role: 'main', type: 'compound' },
-              { pool: 'shoulders_press',  fallback: 'shoulders_press', role: 'secondary', type: 'compound' },
-              { pool: 'back_vertical',    fallback: 'back_vertical', role: 'secondary', type: 'compound' },
-              { pool: 'shoulders_lateral',fallback: 'shoulders_lateral', role: 'accessory', type: 'isolation' },
-              { pool: 'arms_biceps',      fallback: 'arms_biceps', role: 'accessory', type: 'isolation' },
-              { pool: 'arms_triceps',     fallback: 'arms_triceps', role: 'accessory', type: 'isolation' }
-            ],
-            Lower: [
-              { pool: 'legs_squat',       fallback: 'legs_squat', role: 'main', type: 'compound' },
-              { pool: 'legs_hinge',       fallback: 'legs_hinge', role: 'main', type: 'compound' },
-              { pool: 'legs_quad_isolation',      fallback: 'legs_isolation', role: 'accessory', type: 'isolation', prefer: 'quads' },
-              { pool: 'legs_hamstring_isolation', fallback: 'legs_isolation', role: 'accessory', type: 'isolation', prefer: 'hamstrings' },
-              { pool: 'legs_calves',      fallback: 'legs_calves', role: 'accessory', type: 'isolation', prefer: 'calves' }
-            ],
-            Push: [
-              { pool: 'chest_horizontal', fallback: 'chest_press', role: 'main', type: 'compound' },
-              { pool: 'shoulders_press',  fallback: 'shoulders_press', role: 'secondary', type: 'compound' },
-              { pool: 'chest_isolation',  fallback: 'chest_fly', role: 'accessory', type: 'isolation' },
-              { pool: 'shoulders_lateral',fallback: 'shoulders_lateral', role: 'accessory', type: 'isolation' },
-              { pool: 'arms_triceps',     fallback: 'arms_triceps', role: 'accessory', type: 'isolation' }
-            ],
-            Pull: [
-              { pool: 'back_vertical',    fallback: 'back_vertical', role: 'main', type: 'compound' },
-              { pool: 'back_horizontal',  fallback: 'back_horizontal', role: 'secondary', type: 'compound' },
-              { pool: 'shoulders_rear',   fallback: 'shoulders_rear', role: 'accessory', type: 'isolation' },
-              { pool: 'arms_biceps',      fallback: 'arms_biceps', role: 'accessory', type: 'isolation' }
-            ],
-            Legs: [
-              { pool: 'legs_squat',       fallback: 'legs_squat', role: 'main', type: 'compound' },
-              { pool: 'legs_hinge',       fallback: 'legs_hinge', role: 'main', type: 'compound' },
-              { pool: 'legs_quad_isolation',      fallback: 'legs_isolation', role: 'accessory', type: 'isolation', prefer: 'quads' },
-              { pool: 'legs_hamstring_isolation', fallback: 'legs_isolation', role: 'accessory', type: 'isolation', prefer: 'hamstrings' },
-              { pool: 'legs_calves',      fallback: 'legs_calves', role: 'accessory', type: 'isolation', prefer: 'calves' }
-            ],
-            Full: [
-              { pool: 'legs_squat',       fallback: 'legs_squat', role: 'main', type: 'compound' },
-              { pool: 'chest_horizontal', fallback: 'chest_press', role: 'main', type: 'compound' },
-              { pool: 'back_horizontal',  fallback: 'back_horizontal', role: 'secondary', type: 'compound' },
-              { pool: 'shoulders_press',  fallback: 'shoulders_press', role: 'accessory', type: 'compound' },
-              { pool: 'arms_biceps',      fallback: 'arms_biceps', role: 'accessory', type: 'isolation' },
-              { pool: 'arms_triceps',     fallback: 'arms_triceps', role: 'accessory', type: 'isolation' }
-            ]
-          };
+          
 
           // -------------------- Volume landmarks (MEV→MAV) --------------------
           // Muscles tracked in this generator (kept simple; extended tracking requires richer tagging)
@@ -806,34 +970,57 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           }
 
           // -------------------- Exercise selection (solver) --------------------
-          function chooseExercise(slot, remainingTargets, dayFatigue, usedIds, wantLengthened) {
+          
+          function chooseExercise(slot, remainingTargets, dayFatigue, usedIds, wantLengthened, profileObj) {
             const primaryPool = slot.pool;
             const fallbackPool = slot.fallback;
-            const candidates = [...getCandidates(primaryPool), ...getCandidates(fallbackPool)]
+            let candidates = [...getCandidates(primaryPool), ...getCandidates(fallbackPool)]
               .filter(ex => ex.type === slot.type)
               .filter(ex => !usedIds.has(ex.id));
 
             if (!candidates.length) return null;
 
-            // Deterministic scoring
+            // Hard constraint for strength main lift slots (if a matching mainLift exists in DB)
+            if (slot.requireMainLiftKey) {
+              const constrained = candidates.filter(ex => ex.mainLiftKey === slot.requireMainLiftKey);
+              if (constrained.length) candidates = constrained;
+            }
+
+            const w = (profileObj && profileObj.scoring) ? profileObj.scoring : scoreW;
+
             const scored = candidates.map(ex => {
               const need = remainingTargets[ex.primary] ?? 0;
-              const needFit = clamp01(need / 6); // normalize 0..1
+              const needFit = clamp01(need / 6);
               const stim = (ex.type === 'compound') ? 1.0 : 0.7;
-              const romBonus = (wantLengthened && ex.romBias === 'lengthened') ? 0.25 : 0;
+              const romBonus = (wantLengthened && ex.romBias === 'lengthened') ? w.romW : 0;
 
-              // Penalties
-              const fatiguePenalty = (ex.fatigueNum / 4) * (0.35 + 0.10 * dayFatigue.highCount);
-              const setupPenalty = (ex.setupNum / 3) * 0.18;
-              const skillPenalty = (ex.skillNum / 4) * 0.10;
+              // Penalties scale by profile weights
+              const fatiguePenalty = (ex.fatigueNum / 4) * (0.35 + 0.10 * dayFatigue.highCount) * w.fatigueW;
+              const setupPenalty = (ex.setupNum / 3) * 0.18 * w.setupW;
+              const skillPenalty = (ex.skillNum / 4) * 0.10 * w.skillW;
 
-              const score = (needFit * 0.75) + (stim * 0.35) + romBonus - fatiguePenalty - setupPenalty - skillPenalty;
+              // Bonuses
+              let mainLiftBonus = 0;
+              if (ex.isMainLift && (slot.role === 'main' || slot.role === 'secondary')) {
+                mainLiftBonus += w.mainLiftBonus;
+              }
+              if (slot.preferMainLiftKey && ex.mainLiftKey === slot.preferMainLiftKey) {
+                mainLiftBonus += w.mainLiftBonus * 0.5;
+              }
+
+              let equipNudge = 0;
+              if (ex.isMachine) equipNudge += w.preferMachine;
+              if (String(ex.equipment || '').toLowerCase().includes('barbell')) equipNudge += w.preferFreeWeight;
+
+              const sfBonus = (ex.stimulusToFatigue ?? 0.5) * w.stimulusToFatigueW;
+
+              const score = (needFit * w.needW) + (stim * w.stimW) + romBonus + mainLiftBonus + equipNudge + sfBonus
+                - fatiguePenalty - setupPenalty - skillPenalty;
+
               return { ex, score };
             })
             .sort((a,b) => {
-              // Higher score first
               if (b.score !== a.score) return b.score - a.score;
-              // Tie-breakers: lower fatigue, lower setup, stable id
               if (a.ex.fatigueNum !== b.ex.fatigueNum) return a.ex.fatigueNum - b.ex.fatigueNum;
               if (a.ex.setupNum !== b.ex.setupNum) return a.ex.setupNum - b.ex.setupNum;
               return a.ex.id.localeCompare(b.ex.id);
@@ -841,6 +1028,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
 
             return scored[0].ex;
           }
+
 
           function defaultSetsForRole(exRole, exType, wRamp) {
             // Baseline sets by experience and role.
@@ -869,7 +1057,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           }
 
           function buildDayExerciseList(dayType, weekTargets, wRamp, timeCapMin) {
-            const slots = daySlots[dayType] || [];
+            const slots = (profile.daySlots?.[dayType] || PROGRAM_PROFILES.Hypertrophy.daySlots?.[dayType] || PROGRAM_PROFILES.Hypertrophy.daySlots?.['Full'] || []);
             const used = new Set();
 
             const remaining = { ...weekTargets };
@@ -882,7 +1070,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
             for (const slot of slots) {
               const preferMuscle = slot.prefer;
               const wantLengthened = preferMuscle ? (!lengthenedUsedByMuscle[preferMuscle]) : false;
-              const ex = chooseExercise(slot, remaining, dayFatigue, used, wantLengthened);
+              const ex = chooseExercise(slot, remaining, dayFatigue, used, wantLengthened, profile);
               if (!ex) continue;
 
               used.add(ex.id);
