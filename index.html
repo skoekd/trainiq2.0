@@ -587,82 +587,440 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
         }
 
         // ==================== PROGRAM GENERATION ====================
-        
+
+        /**
+         * BULLETPROOF PROGRAM GENERATOR (v3)
+         * Hypertrophy-first with Powerbuilding overlay.
+         *
+         * Key upgrades vs legacy generator:
+         * - Muscle-first weekly volume targets with MEV→MAV ramping inside each 4-week block.
+         * - Deterministic constraint-solver exercise selection (no carousel rotation).
+         * - Block stability: exercises remain fixed within weeks 1–3 of each block.
+         * - Fractional set accounting (primary=1.0, secondary=0.5) to avoid hidden arm/delt overload.
+         * - Fatigue-aware ordering and time-cap trimming.
+         *
+         * Note: Full closed-loop (logbook → next prescription) requires workout logging UI; this generator
+         * produces a robust 12-week plan given current UI inputs.
+         */
         function generateProgram(config) {
           const { experience, days, programType, oneRMs } = config;
           const daysNum = parseInt(days);
-          
+
+          // -------------------- Deterministic helpers --------------------
+          const FATIGUE_NUM = { low: 1, medium: 2, high: 3, very_high: 4 };
+          const SKILL_NUM = { low: 1, medium: 2, high: 3, very_high: 4 };
+          const clamp01 = (x) => Math.max(0, Math.min(1, x));
+          const stableId = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+          function inferSetupCost(eq) {
+            // Setup/time friction heuristics
+            if (!eq) return 2;
+            const e = String(eq).toLowerCase();
+            if (e.includes('barbell')) return 3;
+            if (e.includes('dumbbell')) return 2;
+            if (e.includes('machine') || e.includes('cable')) return 1;
+            return 2;
+          }
+
+          function inferRomBias(exName, patternKey) {
+            // Conservative heuristic defaults. This is extensible.
+            const n = String(exName || '').toLowerCase();
+            const k = String(patternKey || '').toLowerCase();
+            if (n.includes('romanian') || n.includes('rdl')) return 'lengthened';
+            if (n.includes('incline') && (k.includes('chest') || k.includes('curl') || n.includes('fly'))) return 'lengthened';
+            if (n.includes('overhead') && (k.includes('triceps') || n.includes('extension'))) return 'lengthened';
+            if (n.includes('fly')) return 'lengthened';
+            if (n.includes('leg curl') || n.includes('hamstring')) return 'lengthened';
+            return 'mid';
+          }
+
+          function normalizeExercise(raw, poolKey) {
+            const fatigueKey = String(raw.fatigue || '').toLowerCase().trim() || 'medium';
+            const skillKey = String(raw.skill || '').toLowerCase().trim() || 'medium';
+            const equipment = raw.equipment || 'unknown';
+
+            return {
+              id: stableId(raw.name),
+              name: raw.name,
+              poolKey,
+              type: raw.type || 'compound',
+              primary: raw.primary || raw.primeMover || raw.primaryMuscle || 'unknown',
+              secondary: raw.secondary || [],
+              fatigueNum: FATIGUE_NUM[fatigueKey] ?? 2,
+              skillNum: SKILL_NUM[skillKey] ?? 2,
+              setupNum: inferSetupCost(equipment),
+              equipment,
+              repRange: raw.repRange || [8, 12],
+              romBias: inferRomBias(raw.name, poolKey),
+              substitutionGroup: poolKey // stimulus-equivalent family
+            };
+          }
+
+          // Build a unified candidate index from the comprehensive EXERCISE_DATABASE if present.
+          // Fallback: use the lightweight EXERCISE_DB.
+          const SOURCE_DB = (typeof EXERCISE_DATABASE !== 'undefined' && EXERCISE_DATABASE) ? EXERCISE_DATABASE : EXERCISE_DB;
+          function getCandidates(poolKey) {
+            const arr = SOURCE_DB[poolKey] || [];
+            return arr.map(x => normalizeExercise(x, poolKey)).sort((a,b) => a.id.localeCompare(b.id));
+          }
+
+          // -------------------- Split templates --------------------
           const splitTemplates = {
-            3: [['Full'], ['Full'], ['Full']],
-            4: [['Upper'], ['Lower'], ['Upper'], ['Lower']],
-            5: [['Push'], ['Pull'], ['Legs'], ['Upper'], ['Lower']],
-            6: [['Push'], ['Pull'], ['Legs'], ['Push'], ['Pull'], ['Legs']]
+            3: ['Full', 'Full', 'Full'],
+            4: ['Upper', 'Lower', 'Upper', 'Lower'],
+            5: ['Upper', 'Lower', 'Upper', 'Lower', 'Upper'], // hypertrophy-first friendly
+            6: ['Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs']
           };
-          
-          const split = splitTemplates[daysNum];
-          
-          const exercisesByDay = {
-            Upper: ['chest_press', 'back_horizontal', 'shoulders_press', 'arms_biceps', 'arms_triceps'],
-            Lower: ['legs_squat', 'legs_hinge', 'legs_isolation', 'legs_calves'],
-            Push: ['chest_press', 'shoulders_press', 'chest_fly', 'shoulders_lateral', 'arms_triceps'],
-            Pull: ['back_vertical', 'back_horizontal', 'shoulders_rear', 'arms_biceps'],
-            Legs: ['legs_squat', 'legs_hinge', 'legs_isolation', 'legs_glutes', 'legs_calves'],
-            Full: ['legs_squat', 'chest_press', 'back_horizontal', 'shoulders_press']
+          const split = splitTemplates[daysNum] || splitTemplates[4];
+
+          // Day pattern “slots” (roles). Slots are satisfied via scoring solver.
+          const daySlots = {
+            Upper: [
+              { pool: 'chest_horizontal', fallback: 'chest_press', role: 'main',  type: 'compound' },
+              { pool: 'back_horizontal',  fallback: 'back_horizontal', role: 'main', type: 'compound' },
+              { pool: 'shoulders_press',  fallback: 'shoulders_press', role: 'secondary', type: 'compound' },
+              { pool: 'back_vertical',    fallback: 'back_vertical', role: 'secondary', type: 'compound' },
+              { pool: 'shoulders_lateral',fallback: 'shoulders_lateral', role: 'accessory', type: 'isolation' },
+              { pool: 'arms_biceps',      fallback: 'arms_biceps', role: 'accessory', type: 'isolation' },
+              { pool: 'arms_triceps',     fallback: 'arms_triceps', role: 'accessory', type: 'isolation' }
+            ],
+            Lower: [
+              { pool: 'legs_squat',       fallback: 'legs_squat', role: 'main', type: 'compound' },
+              { pool: 'legs_hinge',       fallback: 'legs_hinge', role: 'main', type: 'compound' },
+              { pool: 'legs_quad_isolation',      fallback: 'legs_isolation', role: 'accessory', type: 'isolation', prefer: 'quads' },
+              { pool: 'legs_hamstring_isolation', fallback: 'legs_isolation', role: 'accessory', type: 'isolation', prefer: 'hamstrings' },
+              { pool: 'legs_calves',      fallback: 'legs_calves', role: 'accessory', type: 'isolation', prefer: 'calves' }
+            ],
+            Push: [
+              { pool: 'chest_horizontal', fallback: 'chest_press', role: 'main', type: 'compound' },
+              { pool: 'shoulders_press',  fallback: 'shoulders_press', role: 'secondary', type: 'compound' },
+              { pool: 'chest_isolation',  fallback: 'chest_fly', role: 'accessory', type: 'isolation' },
+              { pool: 'shoulders_lateral',fallback: 'shoulders_lateral', role: 'accessory', type: 'isolation' },
+              { pool: 'arms_triceps',     fallback: 'arms_triceps', role: 'accessory', type: 'isolation' }
+            ],
+            Pull: [
+              { pool: 'back_vertical',    fallback: 'back_vertical', role: 'main', type: 'compound' },
+              { pool: 'back_horizontal',  fallback: 'back_horizontal', role: 'secondary', type: 'compound' },
+              { pool: 'shoulders_rear',   fallback: 'shoulders_rear', role: 'accessory', type: 'isolation' },
+              { pool: 'arms_biceps',      fallback: 'arms_biceps', role: 'accessory', type: 'isolation' }
+            ],
+            Legs: [
+              { pool: 'legs_squat',       fallback: 'legs_squat', role: 'main', type: 'compound' },
+              { pool: 'legs_hinge',       fallback: 'legs_hinge', role: 'main', type: 'compound' },
+              { pool: 'legs_quad_isolation',      fallback: 'legs_isolation', role: 'accessory', type: 'isolation', prefer: 'quads' },
+              { pool: 'legs_hamstring_isolation', fallback: 'legs_isolation', role: 'accessory', type: 'isolation', prefer: 'hamstrings' },
+              { pool: 'legs_calves',      fallback: 'legs_calves', role: 'accessory', type: 'isolation', prefer: 'calves' }
+            ],
+            Full: [
+              { pool: 'legs_squat',       fallback: 'legs_squat', role: 'main', type: 'compound' },
+              { pool: 'chest_horizontal', fallback: 'chest_press', role: 'main', type: 'compound' },
+              { pool: 'back_horizontal',  fallback: 'back_horizontal', role: 'secondary', type: 'compound' },
+              { pool: 'shoulders_press',  fallback: 'shoulders_press', role: 'accessory', type: 'compound' },
+              { pool: 'arms_biceps',      fallback: 'arms_biceps', role: 'accessory', type: 'isolation' },
+              { pool: 'arms_triceps',     fallback: 'arms_triceps', role: 'accessory', type: 'isolation' }
+            ]
           };
-          
+
+          // -------------------- Volume landmarks (MEV→MAV) --------------------
+          // Muscles tracked in this generator (kept simple; extended tracking requires richer tagging)
+          const MUSCLES = ['chest','back','lats','front_delts','side_delts','rear_delts','biceps','triceps','quads','hamstrings','glutes','calves'];
+
+          const LANDMARKS = {
+            Beginner: { MEV: 6,  MAV: 11, MRV: 16 },
+            Intermediate: { MEV: 8, MAV: 15, MRV: 22 },
+            Advanced: { MEV: 8, MAV: 16, MRV: 24 }
+          };
+
+          // Per-week ramp inside a 4-week block (1–3 accumulate, 4 deload)
+          function weekRampInBlock(weekInBlock) {
+            if (weekInBlock === 4) return { volMult: 0.5, deload: true };
+            if (weekInBlock === 3) return { volMult: 1.25, deload: false };
+            if (weekInBlock === 2) return { volMult: 1.12, deload: false };
+            return { volMult: 1.0, deload: false };
+          }
+
+          function baselineWeeklyTargets() {
+            const lm = LANDMARKS[experience] || LANDMARKS.Intermediate;
+            // Hypertrophy-first defaults: emphasize back/quads/delts slightly.
+            const base = {};
+            MUSCLES.forEach(m => { base[m] = lm.MEV; });
+            base.back = lm.MEV + 2;
+            base.quads = lm.MEV + 2;
+            base.side_delts = lm.MEV + 1;
+            base.glutes = lm.MEV + 1;
+            // Arms often get lots of secondary volume; keep at MEV initially.
+            return { base, lm };
+          }
+
+          function applyRails(targets, lm) {
+            const out = { ...targets };
+            Object.keys(out).forEach(m => {
+              const mr = (m === 'hamstrings') ? (lm.MRV - 2) : lm.MRV;
+              out[m] = Math.max(0, Math.min(mr, out[m]));
+            });
+            return out;
+          }
+
+          // -------------------- Quota allocation --------------------
+          function initQuotaMap() {
+            const q = {};
+            MUSCLES.forEach(m => q[m] = 0);
+            return q;
+          }
+
+          function addQuota(q, muscle, val) {
+            if (!muscle) return;
+            if (q[muscle] == null) q[muscle] = 0;
+            q[muscle] += val;
+          }
+
+          function creditExercise(q, ex, sets) {
+            // Primary credit
+            addQuota(q, ex.primary, -sets * 1.0);
+            // Secondary credit (0.5 each)
+            (ex.secondary || []).forEach(s => addQuota(q, s, -sets * 0.5));
+          }
+
+          function estimateExerciseTimeSeconds(ex, sets, reps, restStr) {
+            // Very rough but consistent model.
+            // Set time: ~30–45s depending on reps (scale modestly).
+            const avgReps = (reps[0] + reps[1]) / 2;
+            const setTime = 25 + (avgReps * 2.0); // seconds
+            // Rest
+            const rest = String(restStr || '').includes('min') ? restStr : restStr;
+            const parseRest = (s) => {
+              const m = String(s).match(/(\d+(?:\.\d+)?)\s*\-\s*(\d+(?:\.\d+)?)\s*min/i);
+              if (m) return ((parseFloat(m[1]) + parseFloat(m[2])) / 2) * 60;
+              const m2 = String(s).match(/(\d+)\s*\-\s*(\d+)\s*s/i);
+              if (m2) return (parseFloat(m2[1]) + parseFloat(m2[2])) / 2;
+              const m3 = String(s).match(/(\d+)\s*\-\s*(\d+)\s*min/i);
+              if (m3) return ((parseFloat(m3[1]) + parseFloat(m3[2])) / 2) * 60;
+              return 90;
+            };
+            const restSec = parseRest(rest);
+            // Setup cost
+            const setupNum = ex?.setupNum ?? ex?.tags?.setup ?? 2;
+            const setup = setupNum === 3 ? 120 : setupNum === 2 ? 75 : 45;
+            // Total: setup once + sets*(setTime + rest except last rest)
+            return setup + Math.max(0, sets) * setTime + Math.max(0, sets - 1) * restSec;
+          }
+
+          // -------------------- Exercise selection (solver) --------------------
+          function chooseExercise(slot, remainingTargets, dayFatigue, usedIds, wantLengthened) {
+            const primaryPool = slot.pool;
+            const fallbackPool = slot.fallback;
+            const candidates = [...getCandidates(primaryPool), ...getCandidates(fallbackPool)]
+              .filter(ex => ex.type === slot.type)
+              .filter(ex => !usedIds.has(ex.id));
+
+            if (!candidates.length) return null;
+
+            // Deterministic scoring
+            const scored = candidates.map(ex => {
+              const need = remainingTargets[ex.primary] ?? 0;
+              const needFit = clamp01(need / 6); // normalize 0..1
+              const stim = (ex.type === 'compound') ? 1.0 : 0.7;
+              const romBonus = (wantLengthened && ex.romBias === 'lengthened') ? 0.25 : 0;
+
+              // Penalties
+              const fatiguePenalty = (ex.fatigueNum / 4) * (0.35 + 0.10 * dayFatigue.highCount);
+              const setupPenalty = (ex.setupNum / 3) * 0.18;
+              const skillPenalty = (ex.skillNum / 4) * 0.10;
+
+              const score = (needFit * 0.75) + (stim * 0.35) + romBonus - fatiguePenalty - setupPenalty - skillPenalty;
+              return { ex, score };
+            })
+            .sort((a,b) => {
+              // Higher score first
+              if (b.score !== a.score) return b.score - a.score;
+              // Tie-breakers: lower fatigue, lower setup, stable id
+              if (a.ex.fatigueNum !== b.ex.fatigueNum) return a.ex.fatigueNum - b.ex.fatigueNum;
+              if (a.ex.setupNum !== b.ex.setupNum) return a.ex.setupNum - b.ex.setupNum;
+              return a.ex.id.localeCompare(b.ex.id);
+            });
+
+            return scored[0].ex;
+          }
+
+          function defaultSetsForRole(exRole, exType, wRamp) {
+            // Baseline sets by experience and role.
+            const base = {
+              Beginner:   { compound: 3, isolation: 2 },
+              Intermediate:{ compound: 4, isolation: 3 },
+              Advanced:   { compound: 5, isolation: 3 }
+            };
+            let sets = base[experience]?.[exType] ?? 3;
+
+            // Powerbuilding/Strength: slightly fewer total sets, protect intensity.
+            if (programType === 'Strength') sets = Math.max(2, Math.round(sets * 0.80));
+            if (programType === 'Powerbuilding') sets = Math.max(2, Math.round(sets * 0.90));
+            if (programType === 'Minimalist') sets = Math.max(2, Math.round(sets * 0.70));
+
+            // Role: main lifts get stable volume; accessories carry most ramp.
+            if (exRole === 'main' && exType === 'compound') {
+              // keep main sets stable, mild ramp
+              sets = Math.max(2, Math.round(sets * (wRamp.deload ? 0.6 : (wRamp.volMult >= 1.2 ? 1.05 : 1.0))));
+            } else {
+              sets = Math.max(2, Math.round(sets * wRamp.volMult));
+            }
+
+            if (wRamp.deload) sets = Math.max(1, Math.round(sets * 0.7));
+            return sets;
+          }
+
+          function buildDayExerciseList(dayType, weekTargets, wRamp, timeCapMin) {
+            const slots = daySlots[dayType] || [];
+            const used = new Set();
+
+            const remaining = { ...weekTargets };
+            const dayFatigue = { highCount: 0 };
+
+            // Want lengthened exposure: if primary muscle still underfilled and no lengthened yet.
+            const lengthenedUsedByMuscle = {};
+
+            const chosen = [];
+            for (const slot of slots) {
+              const preferMuscle = slot.prefer;
+              const wantLengthened = preferMuscle ? (!lengthenedUsedByMuscle[preferMuscle]) : false;
+              const ex = chooseExercise(slot, remaining, dayFatigue, used, wantLengthened);
+              if (!ex) continue;
+
+              used.add(ex.id);
+              if (ex.fatigueNum >= 3) dayFatigue.highCount += 1;
+
+              // Determine reps/rir/rest with existing helpers
+              const reps = getRepRange(programType, ex.type === 'compound' ? 'compound' : 'isolation', 0);
+              const sets = defaultSetsForRole(slot.role, ex.type === 'compound' ? 'compound' : 'isolation', wRamp);
+              const rir = getRIR(experience, ex.type === 'compound' ? 'compound' : 'isolation', 1, sets);
+              const rest = getRest(reps[0], ex.type === 'compound' ? 'compound' : 'isolation', programType);
+
+              // Track ROM bias usage
+              if (preferMuscle && ex.romBias === 'lengthened') lengthenedUsedByMuscle[preferMuscle] = true;
+
+              // Credit muscle quotas (fractional)
+              creditExercise(remaining, ex, sets);
+
+              chosen.push({
+                id: ex.id,
+                name: ex.name,
+                primary: ex.primary,
+                type: (ex.type === 'compound') ? 'compound' : 'isolation',
+                role: slot.role,
+                sets,
+                reps,
+                rir,
+                rest,
+                weight: null,
+                tags: {
+                  poolKey: ex.poolKey,
+                  romBias: ex.romBias,
+                  fatigue: ex.fatigueNum,
+                  setup: ex.setupNum,
+                  substitutionGroup: ex.substitutionGroup
+                }
+              });
+            }
+
+            // Time cap trimming: if too long, cut lowest-priority accessories first.
+            if (timeCapMin && chosen.length) {
+              const capSec = Math.max(10, timeCapMin) * 60;
+              const duration = () => chosen.reduce((sum, ex) => sum + estimateExerciseTimeSeconds(ex, ex.sets, ex.reps, ex.rest), 0);
+              let t = duration();
+              if (t > capSec) {
+                // Sort removable exercises: accessories/isolations last in order removed first.
+                const removalOrder = [...chosen]
+                  .map((ex, idx) => ({ ex, idx }))
+                  .sort((a,b) => {
+                    const prio = (e) => (e.role === 'main' ? 0 : e.role === 'secondary' ? 1 : 2);
+                    const ta = prio(a.ex), tb = prio(b.ex);
+                    if (tb !== ta) return tb - ta; // remove lowest priority first
+                    // remove higher setup/fatigue first
+                    const fa = a.ex.tags?.fatigue ?? 2, fb = b.ex.tags?.fatigue ?? 2;
+                    if (fb !== fa) return fb - fa;
+                    const sa = a.ex.tags?.setup ?? 2, sb = b.ex.tags?.setup ?? 2;
+                    if (sb !== sa) return sb - sa;
+                    return b.idx - a.idx;
+                  });
+
+                for (const r of removalOrder) {
+                  if (t <= capSec) break;
+                  if (r.ex.role === 'main') continue;
+                  chosen.splice(r.idx, 1);
+                  t = duration();
+                }
+              }
+            }
+
+            return chosen;
+          }
+
+          // -------------------- Weekly targets & block stability --------------------
+          const { base: baseTargets, lm } = baselineWeeklyTargets();
+
+          function targetsForWeek(week) {
+            const weekInBlock = ((week - 1) % 4) + 1;
+            const ramp = weekRampInBlock(weekInBlock);
+            // Start around MEV, drift toward MAV via multiplier.
+            // Accessories carry most of the ramp via sets; we also scale baseline targets modestly.
+            const t = {};
+            Object.keys(baseTargets).forEach(m => {
+              const target = baseTargets[m] * (ramp.deload ? 0.6 : (weekInBlock === 3 ? 1.20 : weekInBlock === 2 ? 1.10 : 1.0));
+              t[m] = Math.round(target);
+            });
+            return applyRails(t, lm);
+          }
+
+          // Pre-select exercises for each block (weeks 1–3 stable).
+          const blockPlans = {}; // blockIndex -> dayIndex -> exercise list (without per-week sets)
+          function getBlockIndex(week) { return Math.floor((week - 1) / 4); }
+
+          // -------------------- Build program --------------------
           const weeks = [];
           for (let w = 1; w <= 12; w++) {
             const phase = getPhaseParams(w);
+            const blockIndex = getBlockIndex(w);
+            const weekInBlock = ((w - 1) % 4) + 1;
+            const ramp = weekRampInBlock(weekInBlock);
+
+            const weekTargets = targetsForWeek(w);
+
+            if (!blockPlans[blockIndex]) {
+              blockPlans[blockIndex] = {};
+              // Choose stable exercise menus for this block using Week 1 targets.
+              const wk1Targets = targetsForWeek(blockIndex * 4 + 1);
+              const timeCapMin = parseInt(config.time || '') || null;
+              for (let d = 0; d < daysNum; d++) {
+                const dayType = split[d];
+                blockPlans[blockIndex][d] = buildDayExerciseList(dayType, wk1Targets, weekRampInBlock(1), timeCapMin);
+              }
+            }
+
             const workouts = [];
-            
             for (let d = 0; d < daysNum; d++) {
-              const dayType = split[d][0];
-              const pools = exercisesByDay[dayType];
-              const exercises = [];
-              
-              pools.forEach((pool, idx) => {
-                const available = EXERCISE_DB[pool];
-                if (!available || available.length === 0) return;
-                
-                const rotation = (w - 1 + d) % available.length;
-                const ex = available[rotation];
-                const reps = getRepRange(programType, ex.type, idx);
-                const sets = Math.max(2, Math.round(getSets(experience, ex.type, programType) * phase.volumeMult));
-                const rir = getRIR(experience, ex.type, 1, sets);
-                
-                exercises.push({
-                  name: ex.name,
-                  primary: ex.primary,
-                  type: ex.type,
-                  sets,
+              const dayType = split[d];
+              // Copy block menu and re-apply week ramp to set counts
+              const baseList = blockPlans[blockIndex][d] || [];
+              const exercises = baseList.map((ex, idx) => {
+                const exType = ex.type;
+                const role = ex.role;
+                const reps = getRepRange(programType, exType, idx === 0 ? 0 : 1);
+                const sets = defaultSetsForRole(role, exType, ramp);
+                const rir = getRIR(experience, exType, 1, sets);
+                const rest = getRest(reps[0], exType, programType);
+                return {
+                  ...ex,
                   reps,
+                  sets,
                   rir,
-                  rest: getRest(reps[0], ex.type, programType),
-                  weight: getOneRMForExercise(ex, oneRMs) ? calc1RMWeight(getOneRMForExercise(ex, oneRMs), reps[0], reps[1], rir) : null
-                });
-              });
-              
-              // Label lifts for clearer coaching cues (evidence-based nomenclature).
-              // Updated: pick the first (and second) COMPOUND lifts as main/secondary, not just array position.
-              const compoundIdxs = exercises
-                .map((ex, i) => (ex && ex.type === 'compound') ? i : null)
-                .filter(i => i !== null);
-
-              const mainIdx = compoundIdxs[0] ?? null;
-              const secondaryIdx = ((programType === 'Strength' || programType === 'Powerbuilding') ? (compoundIdxs[1] ?? null) : null);
-
-              exercises.forEach((ex, i) => {
-                if (!ex) return;
-                ex.role = 'accessory';
-                if (i === mainIdx) ex.role = 'main';
-                else if (secondaryIdx !== null && i === secondaryIdx) ex.role = 'secondary';
+                  rest,
+                  weight: null
+                };
               });
 
-// Apply supersets if user enabled them. This tags only non-main lifts.
+              // Apply supersets if enabled (only non-main lifts)
               const finalExercises = config.supersets ? applySupersets(exercises, programType) : exercises;
 
-              // Auto-suggest loads for MAIN / SECONDARY compound lifts using the user's 1RMs.
-              // Guardrail: in commercial gym use-case, this is a *starting* recommendation (user can edit).
+              // Suggest loads for main/secondary compound lifts with 1RM if provided
               finalExercises.forEach((ex) => {
                 if (!ex) return;
                 const oneRM = getOneRMForExercise(ex, oneRMs);
@@ -673,23 +1031,18 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
                 }
               });
 
-
-              workouts.push({ 
-                dayNumber: d + 1, 
-                dayType, 
-                exercises: finalExercises 
-              });
+              workouts.push({ dayNumber: d + 1, dayType, exercises: finalExercises });
             }
-            
-            weeks.push({ 
-              number: w, 
-              phase: phase.phase, 
-              deload: phase.isDeload, 
-              workouts 
+
+            weeks.push({
+              number: w,
+              phase: phase.phase,
+              deload: ramp.deload || phase.isDeload,
+              workouts
             });
           }
-          
-          return { weeks, config, createdAt: new Date().toISOString() };
+
+          return { weeks, config, createdAt: new Date().toISOString(), generator: 'bulletproof_v3' };
         }
 
         
