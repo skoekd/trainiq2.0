@@ -544,14 +544,42 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           }
         }
         
-        function getRepRange(programType, exType, position) {
+        // Rep ranges are phase- and role-aware for Powerbuilding.
+        // This is critical to make the 12-week block behave like real powerbuilding:
+        //   Base: higher reps (volume + skill)
+        //   Intensification: moderate reps (strength)
+        //   Peak: low reps (strength expression), while accessories remain hypertrophy-focused.
+        function getRepRange(programType, exType, position, role = 'accessory', phaseName = 'Base') {
           const ranges = {
             Hypertrophy: { compound: [6, 10], isolation: [10, 20] },
             Strength: { compound: [3, 6], isolation: [8, 15] },
-            Powerbuilding: { compound: [4, 8], isolation: [10, 15] },
             Minimalist: { compound: [6, 10], isolation: [12, 20] }
           };
-          const r = ranges[programType][exType];
+
+          // Powerbuilding: phase-based reps for MAIN/SECONDARY compounds.
+          if (programType === 'Powerbuilding') {
+            const isMainish = (role === 'main' || role === 'secondary');
+            if (exType === 'compound' && isMainish) {
+              if (phaseName === 'Peak') {
+                // Main lifts get the lowest reps; secondaries stay slightly higher.
+                const base = (role === 'main') ? [1, 4] : [2, 5];
+                return position === 0 ? base : [base[0] + 1, base[1] + 1];
+              }
+              if (phaseName === 'Intensification') {
+                const base = [3, 6];
+                return position === 0 ? base : [base[0] + 1, base[1] + 1];
+              }
+              // Base phase
+              const base = [4, 8];
+              return position === 0 ? base : [base[0] + 1, base[1] + 2];
+            }
+
+            // Accessories in Powerbuilding stay hypertrophy-biased across phases.
+            const acc = (exType === 'compound') ? [6, 12] : [10, 20];
+            return position === 0 ? acc : [acc[0] + 2, acc[1] + 2];
+          }
+
+          const r = (ranges[programType] || ranges.Hypertrophy)[exType];
           return position === 0 ? r : [r[0] + 2, r[1] + 3];
         }
         
@@ -692,6 +720,42 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
               Legs: HYPERTROPHY_SLOTS.Legs
             };
 
+            // POWERBUILDING = Strength identity (bench/squat/deadlift exposure) + Hypertrophy accessories
+            // Rules enforced via slots:
+            // - Bench is required on Upper and appears on Full days when present
+            // - Squat is required on Lower/Full
+            // - Deadlift is preferred on hinge slots (keeps exposure while allowing RDL etc.)
+            const POWERBUILDING_SLOTS = {
+              Upper: [
+                { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound', requireMainLiftKey:'bench' },
+                { pool:'back_horizontal',  fallback:'horizontal_pull', role:'secondary', type:'compound' },
+                { pool:'back_vertical',    fallback:'vertical_pull',   role:'secondary', type:'compound' },
+                { pool:'shoulders_press',  fallback:'vertical_push',   role:'secondary', type:'compound', preferMainLiftKey:'ohp' },
+                { pool:'shoulders_lateral',fallback:'shoulders_lateral',role:'accessory', type:'isolation' },
+                { pool:'arms_triceps',     fallback:'arms_triceps',    role:'accessory', type:'isolation' },
+                { pool:'arms_biceps',      fallback:'arms_biceps',     role:'accessory', type:'isolation' }
+              ],
+              Lower: [
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound', requireMainLiftKey:'squat' },
+                { pool:'legs_hinge',       fallback:'hinge_pattern',   role:'main', type:'compound', preferMainLiftKey:'deadlift' },
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'secondary', type:'compound', secondarySlot:true },
+                { pool:'legs_quad_isolation',      fallback:'legs_quad_isolation',      role:'accessory', type:'isolation' },
+                { pool:'legs_hamstring_isolation', fallback:'legs_hamstring_isolation', role:'accessory', type:'isolation' },
+                { pool:'core_antiextension', fallback:'core_antirotation', role:'accessory', type:'isolation', optional:true }
+              ],
+              Full: [
+                { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound', requireMainLiftKey:'squat' },
+                { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound', requireMainLiftKey:'bench' },
+                { pool:'legs_hinge',       fallback:'hinge_pattern',   role:'secondary', type:'compound', preferMainLiftKey:'deadlift' },
+                { pool:'back_horizontal',  fallback:'horizontal_pull', role:'secondary', type:'compound' },
+                { pool:'back_vertical',    fallback:'vertical_pull',   role:'accessory', type:'compound', optional:true },
+                { pool:'shoulders_lateral',fallback:'shoulders_lateral',role:'accessory', type:'isolation', optional:true }
+              ],
+              Push: HYPERTROPHY_SLOTS.Push,
+              Pull: HYPERTROPHY_SLOTS.Pull,
+              Legs: HYPERTROPHY_SLOTS.Legs
+            };
+
             const MINIMALIST_SLOTS = {
               Upper: [
                 { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound' },
@@ -734,6 +798,9 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
               switch (type) {
                 case 'Strength':
                   return { needW:0.55, stimW:0.20, romW:0.05, fatigueW:0.55, setupW:0.20, skillW:0.35, mainLiftBonus:0.55, preferMachine:-0.08, preferFreeWeight:0.12, stimulusToFatigueW:0.10 };
+                case 'Powerbuilding':
+                  // Blend: keep strong need+stimulus, but raise main-lift bonus and fatigue sensitivity.
+                  return { needW:0.70, stimW:0.28, romW:0.15, fatigueW:0.42, setupW:0.20, skillW:0.25, mainLiftBonus:0.35, preferMachine:0.05, preferFreeWeight:0.08, stimulusToFatigueW:0.18 };
                 case 'Minimalist':
                   return { needW:0.60, stimW:0.35, romW:0.10, fatigueW:0.30, setupW:0.40, skillW:0.15, mainLiftBonus:0.10, preferMachine:0.12, preferFreeWeight:0.00, stimulusToFatigueW:0.30 };
                 case 'Hypertrophy':
@@ -749,6 +816,13 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
                 5: ['Upper','Lower','Full','Upper','Lower'],
                 6: ['Upper','Lower','Upper','Lower','Full','Full']
               },
+              Powerbuilding: {
+                3: ['Full','Full','Full'],
+                4: ['Upper','Lower','Upper','Lower'],
+                // 5 days: bench frequency + balanced lower exposure
+                5: ['Upper','Lower','Full','Upper','Lower'],
+                6: ['Upper','Lower','Upper','Lower','Full','Full']
+              },
               Minimalist: {
                 3: ['Full','Full','Full'],
                 4: ['Upper','Lower','Upper','Lower'],
@@ -760,6 +834,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
             return {
               Hypertrophy: { name:'Hypertrophy', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
               Strength:    { name:'Strength',    splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Strength || {}) }, daySlots: STRENGTH_SLOTS, scoring: scoringFor('Strength') },
+              Powerbuilding:{ name:'Powerbuilding', splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Powerbuilding || {}) }, daySlots: POWERBUILDING_SLOTS, scoring: scoringFor('Powerbuilding') },
               Minimalist:  { name:'Minimalist',  splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Minimalist || {}) }, daySlots: MINIMALIST_SLOTS, scoring: scoringFor('Minimalist') }
             };
           })();
@@ -1056,7 +1131,7 @@ function generateProgram(config) {
             return sets;
           }
 
-          function buildDayExerciseList(dayType, weekTargets, wRamp, timeCapMin) {
+          function buildDayExerciseList(dayType, weekTargets, wRamp, timeCapMin, phaseName = 'Base') {
             const slots = (profile.daySlots?.[dayType] || PROGRAM_PROFILES.Hypertrophy.daySlots?.[dayType] || PROGRAM_PROFILES.Hypertrophy.daySlots?.['Full'] || []);
             const used = new Set();
 
@@ -1077,7 +1152,7 @@ function generateProgram(config) {
               if (ex.fatigueNum >= 3) dayFatigue.highCount += 1;
 
               // Determine reps/rir/rest with existing helpers
-              const reps = getRepRange(programType, ex.type === 'compound' ? 'compound' : 'isolation', 0);
+              const reps = getRepRange(programType, ex.type === 'compound' ? 'compound' : 'isolation', 0, slot.role, phaseName);
               const sets = defaultSetsForRole(slot.role, ex.type === 'compound' ? 'compound' : 'isolation', wRamp);
               const rir = getRIR(experience, ex.type === 'compound' ? 'compound' : 'isolation', 1, sets);
               const rest = getRest(reps[0], ex.type === 'compound' ? 'compound' : 'isolation', programType);
@@ -1179,7 +1254,7 @@ function generateProgram(config) {
               const timeCapMin = parseInt(config.time || '') || null;
               for (let d = 0; d < daysNum; d++) {
                 const dayType = split[d];
-                blockPlans[blockIndex][d] = buildDayExerciseList(dayType, wk1Targets, weekRampInBlock(1), timeCapMin);
+                blockPlans[blockIndex][d] = buildDayExerciseList(dayType, wk1Targets, weekRampInBlock(1), timeCapMin, 'Base');
               }
             }
 
@@ -1191,7 +1266,7 @@ function generateProgram(config) {
               const exercises = baseList.map((ex, idx) => {
                 const exType = ex.type;
                 const role = ex.role;
-                const reps = getRepRange(programType, exType, idx === 0 ? 0 : 1);
+                const reps = getRepRange(programType, exType, idx === 0 ? 0 : 1, role, phase.phase);
                 const sets = defaultSetsForRole(role, exType, ramp);
                 const rir = getRIR(experience, exType, 1, sets);
                 const rest = getRest(reps[0], exType, programType);
@@ -1537,7 +1612,8 @@ function generateProgram(config) {
               
               <div className="px-4 py-4 space-y-3">
                 {currentWeek.workouts.map((workout, i) => (
-                  <WorkoutCard key={i} workout={workout} />
+                  // IMPORTANT: use a stable key so WorkoutCard state doesn't bleed across week/day changes.
+                  <WorkoutCard key={`${week}-${workout.dayNumber}`} workout={workout} />
                 ))}
               </div>
             </div>
@@ -1548,8 +1624,17 @@ function generateProgram(config) {
         
         function WorkoutCard({ workout }) {
           const [open, setOpen] = useState(false);
+          // Keep a local copy so swaps don't mutate the generated program state.
+          // IMPORTANT: this must resync whenever "workout" changes (week switch, regen, etc.)
+          // or else the "Change" button will only work for the first rendered card due to stale state.
           const [exercises, setExercises] = useState(() => (workout.exercises || []).map(ex => ({ ...ex })));
 	          const [swapState, setSwapState] = useState({ open: false, index: null, options: [], title: '', anchor: null });
+
+          useEffect(() => {
+            setExercises((workout.exercises || []).map(ex => ({ ...ex })));
+            // Close any open chooser when switching workouts to avoid index mismatch.
+            setSwapState({ open: false, index: null, options: [], title: '', anchor: null });
+          }, [workout]);
 
 	          const openSwap = (ex, index, evt) => {
 	            const opts = getAlternativesForExercise(ex.originalName || ex.name, { role: ex.role || 'accessory' });
