@@ -147,7 +147,7 @@ const EXERCISE_DATABASE = {
   // CORE - Anti-Extension
   core_antiextension: [
     { name: "Plank", primary: "core", secondary: [], type: "isometric", equipment: "bodyweight", skill: "low", fatigue: "low", repRange: [30, 120], progression: "time" },
-    { name: "Ab Wheel Rollout", primary: "core", secondary: [], type: "compound", equipment: "equipment", skill: "high", fatigue: "medium", repRange: [5, 15], progression: "reps" },
+    { name: "Ab Wheel Rollout", primary: "core", secondary: [], type: "compound", equipment: "other", skill: "high", fatigue: "medium", repRange: [5, 15], progression: "reps" },
     { name: "Cable Crunch", primary: "core", secondary: [], type: "isolation", equipment: "cable", skill: "low", fatigue: "low", repRange: [12, 20], progression: "linear" }
   ],
   
