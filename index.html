@@ -1761,7 +1761,10 @@ function generateProgram(config) {
         function ensureProfileId() {
           let pid = getProfileIdFromHash();
           if (!pid) {
-            pid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+            // Use window.crypto to avoid ReferenceError in older browsers where `crypto` might be undefined.
+            pid = (window.crypto && window.crypto.randomUUID)
+              ? window.crypto.randomUUID()
+              : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
             setHashToProfile(pid);
           }
           return pid;
@@ -1962,8 +1965,7 @@ function generateProgram(config) {
                         {lvl}
                       </button>
                     ))}
-                    </div>
-                  )}
+                  </div>
                 </div>
                 
                 <div>
