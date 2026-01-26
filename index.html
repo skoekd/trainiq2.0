@@ -33,6 +33,43 @@
 </head>
 <body>
     <div id="root"></div>
+    <script>
+      // Minimal in-page error surface so a blank screen is never "silent".
+      (function () {
+        function show(msg) {
+          try {
+            var el = document.getElementById('root');
+            if (!el) return;
+            el.innerHTML = '';
+            var box = document.createElement('div');
+            box.style.maxWidth = '720px';
+            box.style.margin = '20px auto';
+            box.style.padding = '16px';
+            box.style.border = '1px solid rgba(255,255,255,0.12)';
+            box.style.borderRadius = '12px';
+            box.style.background = 'rgba(255,255,255,0.06)';
+            box.style.fontFamily = 'Inter, system-ui, -apple-system, sans-serif';
+            box.style.lineHeight = '1.35';
+            box.innerHTML =
+              '<div style="font-weight:700; margin-bottom:8px">TrainIQ failed to load</div>' +
+              '<div style="opacity:0.9; font-size:14px; white-space:pre-wrap">' +
+              String(msg || 'Unknown error') +
+              '</div>' +
+              '<div style="opacity:0.75; font-size:12px; margin-top:10px">' +
+              'Tip: On GitHub Pages, confirm <b>exercise-database.js</b> exists next to <b>index.html</b>, and hard refresh Safari.</div>';
+            el.appendChild(box);
+          } catch (_) {}
+        }
+
+        window.addEventListener('error', function (e) {
+          show((e && (e.message || e.error && e.error.stack)) || 'Script error');
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+          var reason = e && e.reason;
+          show((reason && (reason.stack || reason.message)) || String(reason || 'Unhandled promise rejection'));
+        });
+      })();
+    </script>
     <!-- Evidence-based exercise database (used for substitutions) -->
     <script src="exercise-database.js"></script>
     <script type="text/babel">
@@ -3011,7 +3048,18 @@ function generateProgram(config) {
         }
 
         ensureProfileId();
-        ReactDOM.render(<TrainIQ />, document.getElementById('root'));
+        (function mountApp(){
+          const el = document.getElementById('root');
+          if (!el) throw new Error('Root element not found');
+          // React 18 prefers createRoot; keep legacy render as fallback.
+          if (ReactDOM && typeof ReactDOM.createRoot === 'function') {
+            ReactDOM.createRoot(el).render(<TrainIQ />);
+          } else if (ReactDOM && typeof ReactDOM.render === 'function') {
+            ReactDOM.render(<TrainIQ />, el);
+          } else {
+            throw new Error('ReactDOM mount API not available');
+          }
+        })();
     </script>
 </body>
 </html>
