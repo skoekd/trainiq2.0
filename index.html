@@ -393,7 +393,7 @@
           );
         }
 
-        // ==================== HOME SCREEN ====================
+        // ==================== HOME SCREEN WITH ADVANCED TECHNIQUES ====================
         
         function HomeScreen({ config, setConfig, onGenerate }) {
           const isValid = config.experience && config.days && config.time && config.programType;
@@ -411,7 +411,7 @@
                 {/* Existing inputs */}
                 <div>
                   <label className="block text-xs font-bold text-gray-400 mb-2 tracking-wide">EXPERIENCE LEVEL</label>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     {['Beginner', 'Intermediate', 'Advanced'].map(lvl => (
                       <button key={lvl} onClick={() => setConfig({...config, experience: lvl})}
                         className={"p-3 rounded-xl font-semibold text-sm transition btn-touch " +
@@ -437,9 +437,8 @@
                 
                 <div>
                   <label className="block text-xs font-bold text-gray-400 mb-2 tracking-wide">SESSION LENGTH</label>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     {[
-                      { label: 'No cap', value: '' },
                       { label: '45min', value: '45min' },
                       { label: '60min', value: '60min' },
                       { label: '75min', value: '75min' }
@@ -468,6 +467,68 @@
                   </select>
                 </div>
                 
+                {/* NEW: Advanced Techniques Section */}
+                <div className="p-5 rounded-2xl glass border-2 border-orange-500/20" style={{display: "none"}}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-bold text-sm">ADVANCED TECHNIQUES</h3>
+                      <p className="text-xs text-gray-500 mt-1">Evidence-based intensity methods</p>
+                    </div>
+                    <button 
+                      onClick={() => setConfig({
+                        ...config, 
+                        advancedTechniques: {
+                          ...config.advancedTechniques,
+                          enabled: !config.advancedTechniques?.enabled
+                        }
+                      })}
+                      className={"w-14 h-8 rounded-full transition " + 
+                        (config.advancedTechniques?.enabled ? "bg-orange-500" : "bg-gray-700")}
+                    >
+                      <div className={"w-6 h-6 rounded-full bg-white transition-transform " + 
+                        (config.advancedTechniques?.enabled ? "translate-x-7" : "translate-x-1")}></div>
+                    </button>
+                  </div>
+                  
+                  {config.advancedTechniques?.enabled && (
+                    <div className="space-y-3">
+                      <select
+                        value={config.advancedTechniques?.technique || 'dropsets'}
+                        onChange={(e) => setConfig({
+                          ...config,
+                          advancedTechniques: {
+                            ...config.advancedTechniques,
+                            technique: e.target.value
+                          }
+                        })}
+                        className="w-full p-3 rounded-lg bg-black/50 border border-white/10 text-white text-sm"
+                      >
+                        <option value="dropsets">Drop Sets - Quick hypertrophy</option>
+                        <option value="restpause">Rest-Pause - Max intensity</option>
+                        <option value="myoreps">Myo-Reps - Time efficient</option>
+                        <option value="fst7">FST-7 - Pump training</option>
+                        <option value="tempo">Tempo (3-0-1-0) - Control focus</option>
+                        <option value="clusters">Cluster Sets - Strength-skill</option>
+                      </select>
+                      
+                      {config.advancedTechniques?.technique && (
+                        <div className="p-3 rounded-lg bg-black/30 border border-white/5">
+                          <p className="text-xs text-gray-300">
+                            {ADVANCED_TECHNIQUES[config.advancedTechniques.technique]?.description}
+                          </p>
+                          <p className="text-xs text-orange-400 mt-2">
+                            <strong>Evidence:</strong> {ADVANCED_TECHNIQUES[config.advancedTechniques.technique]?.evidence}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex items-center justify-between p-4 rounded-xl glass">
+                  <span className="font-semibold text-sm">SUPERSETS</span>
+                  <button onClick={() => setConfig({...config, supersets: !config.supersets})}
+                    className={"w-14 h-8 rounded-full transition " + (config.supersets ? "bg-orange-500" : "bg-gray-700")}>
                     <div className={"w-6 h-6 rounded-full bg-white transition-transform " + 
                       (config.supersets ? "translate-x-7" : "translate-x-1")}></div>
                   </button>
