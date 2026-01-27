@@ -2261,7 +2261,12 @@ function generateProgram(config) {
                 }} />
               )}
               {tab === 'history' && (
-                <HistoryScreen history={history} onDelete={(idx) => setHistory(prev => prev.filter((_, i) => i !== idx))} />
+                <HistoryScreen 
+                  history={history} 
+                  onDelete={(idx) => setHistory(prev => prev.filter((_, i) => i !== idx))}
+                  setProgram={setProgram}
+                  setTab={setTab}
+                />
               )}
               {tab === 'settings' && (
                 <SettingsScreen config={config} setConfig={setConfig} />
@@ -3146,7 +3151,126 @@ function generateProgram(config) {
 
         // ==================== HISTORY SCREEN ====================
         
-        function HistoryScreen({ history, onDelete }) {
+        // ==================== CSV EXPORT FUNCTIONS ====================
+function escapeCSV(str) {
+  if (str == null) return '';
+  const s = String(str);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function programToCSVRows(program) {
+  const rows = [];
+  const config = program.config || {};
+
+  rows.push(['Program Type', config.programType || 'Unknown']);
+  rows.push(['Experience', config.experience || 'Unknown']);
+  rows.push(['Days Per Week', config.days || 'Unknown']);
+  rows.push(['Session Length', config.time || 'Unknown']);
+  rows.push(['Created', program.createdAt || 'Unknown']);
+  rows.push([]);
+
+  rows.push(['Week', 'Phase', 'Day', 'Day Type', 'Exercise', 'Sets', 'Reps Min', 'Reps Max', 'RIR', 'Rest', 'Weight', 'Role', 'Type']);
+
+  (program.weeks || []).forEach(week => {
+    (week.workouts || []).forEach(workout => {
+      (workout.exercises || []).forEach(ex => {
+        const repsMin = Array.isArray(ex.reps) ? ex.reps[0] : ex.reps;
+        const repsMax = Array.isArray(ex.reps) ? ex.reps[1] : ex.reps;
+
+        rows.push([
+          week.number,
+          week.phase || '',
+          workout.dayNumber,
+          workout.dayType || '',
+          ex.name || '',
+          ex.sets || '',
+          repsMin || '',
+          repsMax || '',
+          ex.rir || '',
+          ex.rest || '',
+          ex.weight || '',
+          ex.role || '',
+          ex.type || ''
+        ]);
+      });
+    });
+  });
+
+  return rows;
+}
+
+function arrayToCSV(rows) {
+  return rows.map(row => 
+    row.map(cell => escapeCSV(cell)).join(',')
+  ).join('\n');
+}
+
+function downloadCSV(csvContent, filename) {
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+}
+
+function HistoryScreen({ history, onDelete, setProgram, setTab }) {
+          const handleExportAll = () => {
+            if (!history || history.length === 0) {
+              alert('No programs to export');
+              return;
+            }
+
+            try {
+              let allRows = [['TrainIQ Program History Export']];
+              allRows.push(['Export Date', new Date().toISOString()]);
+              allRows.push([]);
+
+              history.forEach((program, idx) => {
+                if (idx > 0) allRows.push([]);
+                allRows.push([`========== Program ${idx + 1} ==========`]);
+                allRows.push([]);
+
+                const programRows = programToCSVRows(program);
+                allRows = allRows.concat(programRows);
+              });
+
+              const csv = arrayToCSV(allRows);
+              const timestamp = new Date().toISOString().split('T')[0];
+              downloadCSV(csv, `TrainIQ_History_${timestamp}.csv`);
+
+              alert('Export successful! Check your downloads folder.');
+            } catch (error) {
+              console.error('Export error:', error);
+              alert('Export failed. Please try again.');
+            }
+          };
+
+          const handleExportSingle = (program, index) => {
+            try {
+              const rows = programToCSVRows(program);
+              const csv = arrayToCSV(rows);
+              const timestamp = new Date().toISOString().split('T')[0];
+              const programType = program.config?.programType || 'Program';
+              downloadCSV(csv, `TrainIQ_${programType}_${timestamp}.csv`);
+
+              alert('Export successful!');
+            } catch (error) {
+              console.error('Export error:', error);
+              alert('Export failed. Please try again.');
+            }
+          };
+
           if (history.length === 0) {
             return (
               <div className="min-h-screen flex items-center justify-center content-with-tabs px-4">
@@ -3163,16 +3287,52 @@ function generateProgram(config) {
           
           return (
             <div className="content-with-tabs px-4 py-6">
-              <h2 className="text-2xl font-display font-bold mb-4">HISTORY</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-display font-bold">HISTORY</h2>
+                {history.length > 0 && (
+                  <button 
+                    onClick={handleExportAll}
+                    className="px-4 py-2 rounded-lg premium-gradient text-white text-xs font-bold btn-touch"
+                  >
+                    EXPORT ALL
+                  </button>
+                )}
+              </div>
               <div className="space-y-3">
                 {history.map((prog, idx) => (
                   <div key={idx} className="p-4 rounded-xl glass">
-                    <div className="flex justify-between items-start mb-2">
+                    <div className="flex justify-between items-start mb-3">
                       <div>
                         <h3 className="font-bold text-sm">{prog.config.programType}</h3>
-                        <p className="text-xs text-gray-400">{new Date(prog.createdAt).toLocaleDateString()}</p>
+                        <p className="text-xs text-gray-400">
+                          {new Date(prog.createdAt).toLocaleDateString()} • 
+                          {prog.weeks?.length || 0} weeks
+                        </p>
                       </div>
-                      <button onClick={() => onDelete(idx)} className="text-red-400 text-xl">×</button>
+                      <button 
+                        onClick={() => onDelete(idx)} 
+                        className="text-red-400 text-xl hover:text-red-300"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setProgram(prog);
+                          setTab('workouts');
+                        }}
+                        className="flex-1 px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold btn-touch"
+                      >
+                        RELOAD
+                      </button>
+                      <button
+                        onClick={() => handleExportSingle(prog, idx)}
+                        className="px-4 py-2 rounded-lg glass hover:bg-white/10 text-white text-sm font-bold btn-touch"
+                      >
+                        EXPORT
+                      </button>
                     </div>
                   </div>
                 ))}
