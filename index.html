@@ -2446,23 +2446,6 @@ function generateProgram(config) {
 
           const [logs, setLogs] = useState(() => storage.get('logs', {}));
           const [drafts, setDrafts] = useState(() => storage.get('drafts', {}));
-const draftsCacheRef = useRef(null);
-          // Keep a mutable cache of drafts to avoid re-rendering on every keystroke (prevents iOS keyboard from closing).
-          useEffect(() => { draftsCacheRef.current = drafts; }, [drafts]);
-
-          const persistDraftSilent = (dKey, next) => {
-            const base = draftsCacheRef.current && typeof draftsCacheRef.current === 'object' ? draftsCacheRef.current : {};
-            // Mutate the cache in-place so we can write through to storage without setState.
-            base[dKey] = next;
-            draftsCacheRef.current = base;
-            storage.set('drafts', base);
-          };
-
-          const flushDraftsState = () => {
-            const base = draftsCacheRef.current && typeof draftsCacheRef.current === 'object' ? draftsCacheRef.current : drafts;
-            // Trigger a single re-render (safe on blur) so other parts of UI stay consistent.
-            setDrafts({ ...(base || {}) });
-          };
 
           useEffect(() => { storage.set('logs', logs); }, [logs]);
           useEffect(() => { storage.set('drafts', drafts); }, [drafts]);
@@ -2707,48 +2690,47 @@ const draftsCacheRef = useRef(null);
     const buildEmptySets = (n) => Array.from({ length: Math.max(1, n || 1) }).map(() => ({ w: '', r: '', rir: '' }));
 
     const [draftData, setDraftData] = useState(() => {
-      const existing = getDraft((draftsCacheRef.current || drafts), dKey);
+      const existing = getDraft(drafts, dKey);
       const sets = existing?.sets && Array.isArray(existing.sets) ? existing.sets : buildEmptySets(ex.sets);
       return { sets: sets.slice(0, ex.sets || sets.length), _lastLoggedTs: existing?._lastLoggedTs || null };
     });
-
-    const draftRef = useRef(null);
-    useEffect(() => { draftRef.current = draftData; }, [draftData]);
 
     const [techModal, setTechModal] = useState(null);
 
 
     useEffect(() => {
-      const existing = getDraft((draftsCacheRef.current || drafts), dKey);
+      const existing = getDraft(drafts, dKey);
       const sets = existing?.sets && Array.isArray(existing.sets) ? existing.sets : buildEmptySets(ex.sets);
       setDraftData({ sets: sets.slice(0, ex.sets || sets.length), _lastLoggedTs: existing?._lastLoggedTs || null });
     }, [dKey, ex.sets]);
 
     const setDraftField = (setIdx, field, value) => {
-      const current = (draftRef.current || draftData || {});
-      const next = { ...(current || {}) };
-      const sets = Array.isArray(next.sets) ? next.sets.slice() : buildEmptySets(ex.sets);
-      while (sets.length < (ex.sets || 1)) sets.push({ w: '', r: '', rir: '' });
-      const row = { ...(sets[setIdx] || { w: '', r: '', rir: '' }) };
-      row[field] = value;
-      sets[setIdx] = row;
-      next.sets = sets;
-      draftRef.current = next;
+      setDraftData(prev => {
+        const next = { ...(prev || {}) };
+        const sets = Array.isArray(next.sets) ? next.sets.slice() : buildEmptySets(ex.sets);
+        while (sets.length < (ex.sets || 1)) sets.push({ w: '', r: '', rir: '' });
+        const row = { ...(sets[setIdx] || { w: '', r: '', rir: '' }) };
+        row[field] = value;
+        sets[setIdx] = row;
+        next.sets = sets;
 
-      persistDraftSilent(dKey, next);
+        if (typeof onDraftsChange === 'function') {
+          onDraftsChange(dPrev => setDraft(dPrev, dKey, next));
+        }
+        return next;
+      });
     };
 
     const tryCommitLog = () => {
       // Log only if at least one set has a weight+reps.
-      const curDraft = (draftRef.current || draftData || {});
-      const sets = (curDraft?.sets || []).map(s => ({ w: coerceNum(s?.w), r: coerceNum(s?.r), rir: coerceNum(s?.rir) }))
+      const sets = (draftData?.sets || []).map(s => ({ w: coerceNum(s?.w), r: coerceNum(s?.r), rir: coerceNum(s?.rir) }))
         .filter(s => s.w != null || s.r != null || s.rir != null);
 
       const meaningful = sets.some(s => (s.w != null && s.r != null));
       if (!meaningful) return;
 
       const now = nowTs();
-      const last = (curDraft?._lastLoggedTs || 0);
+      const last = draftData?._lastLoggedTs || 0;
       // Prevent spam: only allow a commit every 30 seconds per exercise.
       if (now - last < 30000) return;
 
@@ -2759,8 +2741,9 @@ const draftsCacheRef = useRef(null);
       setDraftData(prev => {
         const next = { ...(prev || {}) };
         next._lastLoggedTs = now;
-        draftRef.current = next;
-        persistDraftSilent(dKey, next);
+        if (typeof onDraftsChange === 'function') {
+          onDraftsChange(dPrev => setDraft(dPrev, dKey, next));
+        }
         return next;
       });
     };
@@ -2957,7 +2940,7 @@ const draftsCacheRef = useRef(null);
 
         <div className="space-y-2">
           {Array.from({length: ex.sets}).map((_, setIdx) => (
-            <div key={dKey + '-' + setIdx} className="flex items-center gap-2 p-2 rounded bg-black/30">
+            <div key={setIdx} className="flex items-center gap-2 p-2 rounded bg-black/30">
               <span className="text-xs font-bold text-gray-500 w-12">Set {setIdx + 1}</span>
               <div className="flex flex-col items-center w-20 sm:w-24">
                 {ex.weight && <div className="text-[10px] font-bold text-green-400 -mb-1">~{ex.weight}</div>}
@@ -2967,8 +2950,8 @@ const draftsCacheRef = useRef(null);
                   pattern="[0-9]*[.,]?[0-9]*"
                   enterKeyHint="done"
                   placeholder="lbs"
-                  defaultValue={(draftData.sets?.[setIdx]?.w ?? '')}
-                  onInput={(e) => setDraftField(setIdx, 'w', e.currentTarget.value)}
+                  value={(draftData.sets?.[setIdx]?.w ?? '')}
+                  onChange={(e) => setDraftField(setIdx, 'w', e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                   onBlur={tryCommitLog}
                   className="w-full p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
@@ -2981,8 +2964,8 @@ const draftsCacheRef = useRef(null);
                 pattern="[0-9]*"
                 enterKeyHint="done"
                 placeholder="reps"
-                defaultValue={(draftData.sets?.[setIdx]?.r ?? '')}
-                onInput={(e) => setDraftField(setIdx, 'r', e.currentTarget.value)}
+                value={(draftData.sets?.[setIdx]?.r ?? '')}
+                onChange={(e) => setDraftField(setIdx, 'r', e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                 onBlur={tryCommitLog}
                 className="w-20 sm:w-24 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
@@ -2993,8 +2976,8 @@ const draftsCacheRef = useRef(null);
                 pattern="[0-9]*"
                 enterKeyHint="done"
                 placeholder="RIR"
-                defaultValue={(draftData.sets?.[setIdx]?.rir ?? '')}
-                onInput={(e) => setDraftField(setIdx, 'rir', e.currentTarget.value)}
+                value={(draftData.sets?.[setIdx]?.rir ?? '')}
+                onChange={(e) => setDraftField(setIdx, 'rir', e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                 onBlur={tryCommitLog}
                 className="w-16 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
