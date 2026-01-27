@@ -2695,6 +2695,9 @@ function generateProgram(config) {
       return { sets: sets.slice(0, ex.sets || sets.length), _lastLoggedTs: existing?._lastLoggedTs || null };
     });
 
+    const draftRef = useRef(null);
+    useEffect(() => { draftRef.current = draftData; }, [draftData]);
+
     const [techModal, setTechModal] = useState(null);
 
 
@@ -2705,32 +2708,32 @@ function generateProgram(config) {
     }, [dKey, ex.sets]);
 
     const setDraftField = (setIdx, field, value) => {
-      setDraftData(prev => {
-        const next = { ...(prev || {}) };
-        const sets = Array.isArray(next.sets) ? next.sets.slice() : buildEmptySets(ex.sets);
-        while (sets.length < (ex.sets || 1)) sets.push({ w: '', r: '', rir: '' });
-        const row = { ...(sets[setIdx] || { w: '', r: '', rir: '' }) };
-        row[field] = value;
-        sets[setIdx] = row;
-        next.sets = sets;
+      const current = (draftRef.current || draftData || {});
+      const next = { ...(current || {}) };
+      const sets = Array.isArray(next.sets) ? next.sets.slice() : buildEmptySets(ex.sets);
+      while (sets.length < (ex.sets || 1)) sets.push({ w: '', r: '', rir: '' });
+      const row = { ...(sets[setIdx] || { w: '', r: '', rir: '' }) };
+      row[field] = value;
+      sets[setIdx] = row;
+      next.sets = sets;
+      draftRef.current = next;
 
-        if (typeof onDraftsChange === 'function') {
-          onDraftsChange(dPrev => setDraft(dPrev, dKey, next));
-        }
-        return next;
-      });
+      if (typeof onDraftsChange === 'function') {
+        onDraftsChange(dPrev => setDraft(dPrev, dKey, next));
+      }
     };
 
     const tryCommitLog = () => {
       // Log only if at least one set has a weight+reps.
-      const sets = (draftData?.sets || []).map(s => ({ w: coerceNum(s?.w), r: coerceNum(s?.r), rir: coerceNum(s?.rir) }))
+      const curDraft = (draftRef.current || draftData || {});
+      const sets = (curDraft?.sets || []).map(s => ({ w: coerceNum(s?.w), r: coerceNum(s?.r), rir: coerceNum(s?.rir) }))
         .filter(s => s.w != null || s.r != null || s.rir != null);
 
       const meaningful = sets.some(s => (s.w != null && s.r != null));
       if (!meaningful) return;
 
       const now = nowTs();
-      const last = draftData?._lastLoggedTs || 0;
+      const last = (curDraft?._lastLoggedTs || 0);
       // Prevent spam: only allow a commit every 30 seconds per exercise.
       if (now - last < 30000) return;
 
@@ -2741,6 +2744,7 @@ function generateProgram(config) {
       setDraftData(prev => {
         const next = { ...(prev || {}) };
         next._lastLoggedTs = now;
+        draftRef.current = next;
         if (typeof onDraftsChange === 'function') {
           onDraftsChange(dPrev => setDraft(dPrev, dKey, next));
         }
@@ -2940,7 +2944,7 @@ function generateProgram(config) {
 
         <div className="space-y-2">
           {Array.from({length: ex.sets}).map((_, setIdx) => (
-            <div key={setIdx} className="flex items-center gap-2 p-2 rounded bg-black/30">
+            <div key={dKey + '-' + setIdx} className="flex items-center gap-2 p-2 rounded bg-black/30">
               <span className="text-xs font-bold text-gray-500 w-12">Set {setIdx + 1}</span>
               <div className="flex flex-col items-center w-20 sm:w-24">
                 {ex.weight && <div className="text-[10px] font-bold text-green-400 -mb-1">~{ex.weight}</div>}
@@ -2950,8 +2954,8 @@ function generateProgram(config) {
                   pattern="[0-9]*[.,]?[0-9]*"
                   enterKeyHint="done"
                   placeholder="lbs"
-                  value={(draftData.sets?.[setIdx]?.w ?? '')}
-                  onChange={(e) => setDraftField(setIdx, 'w', e.target.value)}
+                  defaultValue={(draftData.sets?.[setIdx]?.w ?? '')}
+                  onInput={(e) => setDraftField(setIdx, 'w', e.currentTarget.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                   onBlur={tryCommitLog}
                   className="w-full p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
@@ -2964,8 +2968,8 @@ function generateProgram(config) {
                 pattern="[0-9]*"
                 enterKeyHint="done"
                 placeholder="reps"
-                value={(draftData.sets?.[setIdx]?.r ?? '')}
-                onChange={(e) => setDraftField(setIdx, 'r', e.target.value)}
+                defaultValue={(draftData.sets?.[setIdx]?.r ?? '')}
+                onInput={(e) => setDraftField(setIdx, 'r', e.currentTarget.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                 onBlur={tryCommitLog}
                 className="w-20 sm:w-24 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
@@ -2976,8 +2980,8 @@ function generateProgram(config) {
                 pattern="[0-9]*"
                 enterKeyHint="done"
                 placeholder="RIR"
-                value={(draftData.sets?.[setIdx]?.rir ?? '')}
-                onChange={(e) => setDraftField(setIdx, 'rir', e.target.value)}
+                defaultValue={(draftData.sets?.[setIdx]?.rir ?? '')}
+                onInput={(e) => setDraftField(setIdx, 'rir', e.currentTarget.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                 onBlur={tryCommitLog}
                 className="w-16 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
