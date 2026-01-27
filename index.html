@@ -1106,19 +1106,29 @@ function getSets(experience, exType, programType) {
         // - They are phase-limited, fatigue-budgeted, and gated by user experience.
         // - We attach techniques to exercises as metadata for display + (optionally) set/rep tweaks.
         const TECHNIQUE_CATALOG = {
-          drop_set:        { label: 'Drop Set',            tier: 'advanced',  fatigue: 2 },
-          rest_pause:      { label: 'Rest-Pause',          tier: 'advanced',  fatigue: 2 },
-          myo_reps:        { label: 'Myo-Reps',            tier: 'advanced',  fatigue: 2 },
-          cluster_sets:    { label: 'Cluster Sets',        tier: 'advanced',  fatigue: 2 },
-          fst7:            { label: 'FST-7',               tier: 'advanced',  fatigue: 2 },
-          bfr:             { label: 'BFR',                 tier: 'advanced',  fatigue: 2 },
-          lengthened_partials:{ label: 'Lengthened Partials', tier:'advanced', fatigue: 2 },
-          tempo_ecc:       { label: 'Slow Eccentric',      tier: 'intermediate', fatigue: 1 },
-          pause_reps:      { label: 'Paused Reps',         tier: 'intermediate', fatigue: 1 },
-          gvt_10x10:       { label: 'GVT 10×10',           tier: 'intermediate', fatigue: 2 },
-          edt_pr_zone:     { label: 'EDT PR Zone',         tier: 'intermediate', fatigue: 2 },
-          density_finisher:{ label: 'Density Finisher',    tier: 'intermediate', fatigue: 2 }
+          drop_set:        { label: 'Drop Set',            tier: 'advanced',      fatigue: 2, description: 'After your final working set, immediately reduce the load (typically 20–30%) and continue for additional reps with controlled form. This extends the set past initial fatigue to increase metabolic stress and motor unit recruitment.' },
+          rest_pause:      { label: 'Rest-Pause',          tier: 'advanced',      fatigue: 2, description: 'Perform a near-failure set, rest briefly (10–20 seconds), then do mini-sets with the same load until you reach the target total reps. This keeps load high while accumulating more quality reps.' },
+          myo_reps:        { label: 'Myo-Reps',            tier: 'advanced',      fatigue: 2, description: 'Do one activation set close to failure, then perform a series of short-rest mini-sets (e.g., 3–5 reps) until you hit a rep target or form degrades. Similar to rest-pause but typically uses smaller mini-sets and is great for isolation work.' },
+          cluster_sets:    { label: 'Cluster Sets',        tier: 'advanced',      fatigue: 2, description: 'Break a set into small clusters with short rests inside the set (e.g., 4×(2 reps) with 15–30s between clusters). This lets you keep power/quality high with heavier loads.' },
+          fst7:            { label: 'FST-7',               tier: 'advanced',      fatigue: 2, description: 'Finish a muscle group with 7 short-rest sets (usually 8–15 reps) on a single isolation movement. The goal is a high pump and extended time-under-tension. Keep form strict and rest short (30–45s).' },
+          bfr:             { label: 'BFR',                 tier: 'advanced',      fatigue: 2, description: 'Blood Flow Restriction uses light loads with an occlusion cuff/band to partially restrict venous return. It creates a high fatigue stimulus with low joint stress. Only use with proper cuffs/bands and conservative pressure.' },
+          lengthened_partials:{ label: 'Lengthened Partials', tier: 'advanced',    fatigue: 2, description: 'Partial reps performed in the most stretched (lengthened) portion of the range of motion. This biases tension where many muscles respond strongly for hypertrophy. Use controlled tempo and stop if joint discomfort appears.' },
+          tempo_ecc:       { label: 'Slow Eccentric',      tier: 'intermediate', fatigue: 1, description: 'Slow the lowering phase (eccentric) of each rep (e.g., 3–5 seconds down). This increases time-under-tension and improves control. Keep the concentric (lifting) phase strong and stable.' },
+          pause_reps:      { label: 'Paused Reps',         tier: 'intermediate', fatigue: 1, description: 'Add a deliberate pause at the hardest point (bottom or midpoint) for 1–3 seconds before completing the rep. This builds strength out of disadvantaged positions and improves technique.' },
+          gvt_10x10:       { label: 'GVT 10×10',           tier: 'intermediate', fatigue: 2, description: 'German Volume Training: perform 10 sets of 10 reps on a main lift with the same load and short rest (commonly 60–90s). The goal is high volume with consistent technique. Start conservatively so you can complete all sets.' },
+          edt_pr_zone:     { label: 'EDT PR Zone',         tier: 'intermediate', fatigue: 2, description: 'Escalating Density Training “PR zone”: alternate two movements for a fixed time block (often 8–12 minutes) and accumulate reps. Try to beat your previous total reps next time while keeping form strict.' },
+          density_finisher:{ label: 'Density Finisher',    tier: 'intermediate', fatigue: 2, description: 'A short, high-density end-of-workout block where you reduce rest and accumulate quality reps on a safe movement. The goal is extra stimulus without heavy loading. Stop 1–2 reps shy of form breakdown.' }
         };
+
+        function getTechniqueDetails(t) {
+          const key = t?.key || '';
+          const fromCat = (key && TECHNIQUE_CATALOG[key]) ? TECHNIQUE_CATALOG[key] : {};
+          const label = t?.label || fromCat.label || key || 'Technique';
+          const description = fromCat.description || t?.cue || 'This technique modifies how you perform the prescribed sets to increase training stimulus.';
+          const cue = t?.cue || '';
+          const tier = fromCat.tier || t?.tier || '';
+          return { key, label, description, cue, tier };
+        }
 
         function canUseAdvancedTechniques(config) {
           if (!config?.advancedTechniques) return false;
@@ -2685,6 +2695,9 @@ function generateProgram(config) {
       return { sets: sets.slice(0, ex.sets || sets.length), _lastLoggedTs: existing?._lastLoggedTs || null };
     });
 
+    const [techModal, setTechModal] = useState(null);
+
+
     useEffect(() => {
       const existing = getDraft(drafts, dKey);
       const sets = existing?.sets && Array.isArray(existing.sets) ? existing.sets : buildEmptySets(ex.sets);
@@ -2822,12 +2835,81 @@ function generateProgram(config) {
         
         {Array.isArray(ex.techniques) && ex.techniques.length > 0 && (
           <div className="flex flex-wrap gap-1.5 text-xs mb-2">
-            {ex.techniques.map((t, i) => (
-              <span key={i} className="px-2 py-1 bg-emerald-500/15 text-emerald-300 rounded font-bold">
-                <span className="opacity-75 font-extrabold tracking-wider mr-1">TECH</span>
-                {t.label || t.key}
-              </span>
-            ))}
+            {ex.techniques.map((t, i) => {
+              const details = getTechniqueDetails(t);
+              return (
+                <span key={i} className="px-2 py-1 bg-emerald-500/15 text-emerald-300 rounded font-bold inline-flex items-center">
+                  <span className="opacity-75 font-extrabold tracking-wider mr-1">TECH</span>
+                  <span>{details.label}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTechModal(details); }}
+                    className="ml-2 w-4 h-4 rounded-full border border-emerald-400/30 bg-emerald-500/10 text-emerald-200 flex items-center justify-center text-[10px] leading-none hover:bg-emerald-500/20 btn-touch"
+                    aria-label={`About ${details.label}`}
+                    title={`What is ${details.label}?`}
+                  >
+                    i
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {techModal && (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setTechModal(null)}
+          >
+            <div className="absolute inset-0 bg-black/70" />
+            <div
+              className="relative w-full max-w-md rounded-2xl glass p-4"
+              onClick={(e) => { e.stopPropagation(); }}
+            >
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div>
+                  <div className="text-[11px] text-emerald-300 font-bold tracking-wider uppercase">Technique</div>
+                  <div className="text-lg font-semibold leading-tight">{techModal.label}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTechModal(null)}
+                  className="w-9 h-9 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center btn-touch"
+                  aria-label="Close"
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="text-sm text-gray-200 leading-relaxed">
+                {techModal.description}
+              </div>
+
+              {techModal.cue && (
+                <div className="mt-3 p-3 rounded-xl bg-black/40 border border-white/10">
+                  <div className="text-[11px] text-gray-400 font-bold tracking-wider uppercase mb-1">How to apply</div>
+                  <div className="text-sm text-gray-200">{techModal.cue}</div>
+                </div>
+              )}
+
+              <div className="mt-3 flex items-center justify-between">
+                {techModal.tier && (
+                  <span className="text-[11px] font-bold px-2 py-1 rounded bg-white/5 border border-white/10 text-gray-300">
+                    {String(techModal.tier).toUpperCase()}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setTechModal(null)}
+                  className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-semibold btn-touch"
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
