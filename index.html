@@ -2446,6 +2446,23 @@ function generateProgram(config) {
 
           const [logs, setLogs] = useState(() => storage.get('logs', {}));
           const [drafts, setDrafts] = useState(() => storage.get('drafts', {}));
+const draftsCacheRef = useRef(null);
+          // Keep a mutable cache of drafts to avoid re-rendering on every keystroke (prevents iOS keyboard from closing).
+          useEffect(() => { draftsCacheRef.current = drafts; }, [drafts]);
+
+          const persistDraftSilent = (dKey, next) => {
+            const base = draftsCacheRef.current && typeof draftsCacheRef.current === 'object' ? draftsCacheRef.current : {};
+            // Mutate the cache in-place so we can write through to storage without setState.
+            base[dKey] = next;
+            draftsCacheRef.current = base;
+            storage.set('drafts', base);
+          };
+
+          const flushDraftsState = () => {
+            const base = draftsCacheRef.current && typeof draftsCacheRef.current === 'object' ? draftsCacheRef.current : drafts;
+            // Trigger a single re-render (safe on blur) so other parts of UI stay consistent.
+            setDrafts({ ...(base || {}) });
+          };
 
           useEffect(() => { storage.set('logs', logs); }, [logs]);
           useEffect(() => { storage.set('drafts', drafts); }, [drafts]);
@@ -2690,25 +2707,24 @@ function generateProgram(config) {
     const buildEmptySets = (n) => Array.from({ length: Math.max(1, n || 1) }).map(() => ({ w: '', r: '', rir: '' }));
 
     const [draftData, setDraftData] = useState(() => {
-      const existing = getDraft(drafts, dKey);
+      const existing = getDraft((draftsCacheRef.current || drafts), dKey);
       const sets = existing?.sets && Array.isArray(existing.sets) ? existing.sets : buildEmptySets(ex.sets);
       return { sets: sets.slice(0, ex.sets || sets.length), _lastLoggedTs: existing?._lastLoggedTs || null };
     });
-    const draftRef = useRef(draftData);
-    useEffect(() => { draftRef.current = draftData; }, [draftData]);
 
+    const draftRef = useRef(null);
+    useEffect(() => { draftRef.current = draftData; }, [draftData]);
 
     const [techModal, setTechModal] = useState(null);
 
 
     useEffect(() => {
-      const existing = getDraft(drafts, dKey);
+      const existing = getDraft((draftsCacheRef.current || drafts), dKey);
       const sets = existing?.sets && Array.isArray(existing.sets) ? existing.sets : buildEmptySets(ex.sets);
       setDraftData({ sets: sets.slice(0, ex.sets || sets.length), _lastLoggedTs: existing?._lastLoggedTs || null });
     }, [dKey, ex.sets]);
 
     const setDraftField = (setIdx, field, value) => {
-      // iOS Safari focus safety: do NOT set state on each keystroke.
       const current = (draftRef.current || draftData || {});
       const next = { ...(current || {}) };
       const sets = Array.isArray(next.sets) ? next.sets.slice() : buildEmptySets(ex.sets);
@@ -2718,25 +2734,13 @@ function generateProgram(config) {
       sets[setIdx] = row;
       next.sets = sets;
       draftRef.current = next;
-      // Note: we intentionally don't call setDraftData/onDraftsChange here.
-    };
 
-    const flushDraftToState = (nextDraft) => {
-      const nd = nextDraft || draftRef.current || draftData;
-      if (!nd) return;
-      setDraftData(nd);
-      if (typeof onDraftsChange === 'function') {
-        onDraftsChange(dPrev => setDraft(dPrev, dKey, nd));
-      }
+      persistDraftSilent(dKey, next);
     };
 
     const tryCommitLog = () => {
-      // IMPORTANT: use draftRef (uncontrolled inputs) so iOS typing doesn't trigger re-render/focus loss.
-      const curDraft = (draftRef.current || draftData || {});
-      // Always flush drafts on blur so values persist when navigating.
-      flushDraftToState(curDraft);
-
       // Log only if at least one set has a weight+reps.
+      const curDraft = (draftRef.current || draftData || {});
       const sets = (curDraft?.sets || []).map(s => ({ w: coerceNum(s?.w), r: coerceNum(s?.r), rir: coerceNum(s?.rir) }))
         .filter(s => s.w != null || s.r != null || s.rir != null);
 
@@ -2744,7 +2748,7 @@ function generateProgram(config) {
       if (!meaningful) return;
 
       const now = nowTs();
-      const last = curDraft?._lastLoggedTs || 0;
+      const last = (curDraft?._lastLoggedTs || 0);
       // Prevent spam: only allow a commit every 30 seconds per exercise.
       if (now - last < 30000) return;
 
@@ -2755,9 +2759,8 @@ function generateProgram(config) {
       setDraftData(prev => {
         const next = { ...(prev || {}) };
         next._lastLoggedTs = now;
-        if (typeof onDraftsChange === 'function') {
-          onDraftsChange(dPrev => setDraft(dPrev, dKey, next));
-        }
+        draftRef.current = next;
+        persistDraftSilent(dKey, next);
         return next;
       });
     };
@@ -2954,12 +2957,11 @@ function generateProgram(config) {
 
         <div className="space-y-2">
           {Array.from({length: ex.sets}).map((_, setIdx) => (
-            <div key={setIdx} className="flex items-center gap-2 p-2 rounded bg-black/30">
+            <div key={dKey + '-' + setIdx} className="flex items-center gap-2 p-2 rounded bg-black/30">
               <span className="text-xs font-bold text-gray-500 w-12">Set {setIdx + 1}</span>
               <div className="flex flex-col items-center w-20 sm:w-24">
                 {ex.weight && <div className="text-[10px] font-bold text-green-400 -mb-1">~{ex.weight}</div>}
                 <input
-                  key={`${dKey}-${setIdx}-w`}
                   type="text"
                   inputMode="decimal"
                   pattern="[0-9]*[.,]?[0-9]*"
@@ -2974,7 +2976,6 @@ function generateProgram(config) {
               </div>
               <span className="text-xs text-gray-600">×</span>
               <input
-                key={`${dKey}-${setIdx}-r`}
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
@@ -2987,13 +2988,14 @@ function generateProgram(config) {
                 className="w-20 sm:w-24 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
               />
               <input
-                type="number"
+                type="text"
                 inputMode="numeric"
+                pattern="[0-9]*"
+                enterKeyHint="done"
                 placeholder="RIR"
-                min="0"
-                max="6"
-                value={(draftData.sets?.[setIdx]?.rir ?? '')}
-                onChange={(e) => setDraftField(setIdx, 'rir', e.target.value)}
+                defaultValue={(draftData.sets?.[setIdx]?.rir ?? '')}
+                onInput={(e) => setDraftField(setIdx, 'rir', e.currentTarget.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                 onBlur={tryCommitLog}
                 className="w-16 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
               />
@@ -3219,8 +3221,9 @@ function generateProgram(config) {
                     ].map(({key, label}) => (
                       <div key={key} className="flex justify-between items-center">
                         <span className="text-sm">{label}:</span>
-                        <input type="number" value={config.oneRMs[key]} placeholder="0"
+                        <input type="text" inputMode="numeric" pattern="[0-9]*" enterKeyHint="done" value={config.oneRMs[key]} placeholder="0"
                           onChange={(e) => setConfig({...config, oneRMs: {...config.oneRMs, [key]: e.target.value}})}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                           className="w-20 p-2 rounded bg-black/50 border border-white/10 text-white text-center outline-none focus:border-orange-500"
                         />
                       </div>
