@@ -2945,33 +2945,40 @@ function generateProgram(config) {
               <div className="flex flex-col items-center w-20 sm:w-24">
                 {ex.weight && <div className="text-[10px] font-bold text-green-400 -mb-1">~{ex.weight}</div>}
                 <input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
+                  pattern="[0-9]*[.,]?[0-9]*"
+                  enterKeyHint="done"
                   placeholder="lbs"
                   value={(draftData.sets?.[setIdx]?.w ?? '')}
                   onChange={(e) => setDraftField(setIdx, 'w', e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                   onBlur={tryCommitLog}
                   className="w-full p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
                 />
               </div>
               <span className="text-xs text-gray-600">×</span>
               <input
-                type="number"
+                type="text"
                 inputMode="numeric"
+                pattern="[0-9]*"
+                enterKeyHint="done"
                 placeholder="reps"
                 value={(draftData.sets?.[setIdx]?.r ?? '')}
                 onChange={(e) => setDraftField(setIdx, 'r', e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                 onBlur={tryCommitLog}
                 className="w-20 sm:w-24 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
               />
               <input
-                type="number"
+                type="text"
                 inputMode="numeric"
+                pattern="[0-9]*"
+                enterKeyHint="done"
                 placeholder="RIR"
-                min="0"
-                max="6"
                 value={(draftData.sets?.[setIdx]?.rir ?? '')}
                 onChange={(e) => setDraftField(setIdx, 'rir', e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                 onBlur={tryCommitLog}
                 className="w-16 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
               />
@@ -3197,8 +3204,9 @@ function generateProgram(config) {
                     ].map(({key, label}) => (
                       <div key={key} className="flex justify-between items-center">
                         <span className="text-sm">{label}:</span>
-                        <input type="number" value={config.oneRMs[key]} placeholder="0"
+                        <input type="text" inputMode="numeric" pattern="[0-9]*" enterKeyHint="done" value={config.oneRMs[key]} placeholder="0"
                           onChange={(e) => setConfig({...config, oneRMs: {...config.oneRMs, [key]: e.target.value}})}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                           className="w-20 p-2 rounded bg-black/50 border border-white/10 text-white text-center outline-none focus:border-orange-500"
                         />
                       </div>
