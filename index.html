@@ -7,6 +7,7 @@
     <link rel="manifest" href="manifest.json">
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom-client.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Antonio:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2979,7 +2980,66 @@ function generateProgram(config) {
         }
 
         ensureProfileId();
-        ReactDOM.render(<TrainIQ />, document.getElementById('root'));
-    </script>
+        
+        // ==================== RUNTIME ERROR GUARD (shows on crash) ====================
+        (function(){
+          const showErr = (msg) => {
+            try {
+              let el = document.getElementById('trainiq-error-overlay');
+              if (!el) {
+                el = document.createElement('div');
+                el.id = 'trainiq-error-overlay';
+                el.style.position = 'fixed';
+                el.style.inset = '0';
+                el.style.background = 'rgba(0,0,0,0.92)';
+                el.style.zIndex = '999999';
+                el.style.padding = '16px';
+                el.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+                el.style.color = '#fff';
+                el.style.overflow = 'auto';
+                el.innerHTML =
+                  '<div style="max-width:720px;margin:0 auto;padding:20px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(255,255,255,0.04)">' +
+                    '<div style="font-weight:800;letter-spacing:0.04em;margin-bottom:10px">TrainIQ hit an error</div>' +
+                    '<div style="font-size:12px;color:rgba(255,255,255,0.75);margin-bottom:10px">Screenshot this message and send it to me.</div>' +
+                    '<pre id="trainiq-error-text" style="white-space:pre-wrap;font-size:12px;line-height:1.35;background:rgba(0,0,0,0.35);padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.08)"></pre>' +
+                    '<button id="trainiq-error-reload" style="margin-top:12px;padding:10px 14px;border-radius:12px;border:0;background:#3b82f6;color:white;font-weight:800">Reload</button>' +
+                  '</div>';
+                document.body.appendChild(el);
+                document.getElementById('trainiq-error-reload').onclick = () => location.reload();
+              }
+              const pre = document.getElementById('trainiq-error-text');
+              if (pre) pre.textContent = msg;
+            } catch (e) {}
+          };
+
+          window.addEventListener('error', (e) => {
+            const msg = (e && e.error && e.error.stack) ? e.error.stack : (e && e.message) ? e.message : String(e);
+            showErr(msg);
+          });
+
+          window.addEventListener('unhandledrejection', (e) => {
+            const reason = e && e.reason;
+            const msg = (reason && reason.stack) ? reason.stack : (reason && reason.message) ? reason.message : String(reason);
+            showErr(msg);
+          });
+        })();
+
+        // ==================== APP MOUNT (React 18-safe) ====================
+        (function(){
+          const rootEl = document.getElementById('root');
+          try {
+            if (window.ReactDOMClient && ReactDOMClient.createRoot) {
+              ReactDOMClient.createRoot(rootEl).render(<TrainIQ />);
+            } else if (window.ReactDOM && ReactDOM.createRoot) {
+              ReactDOM.createRoot(rootEl).render(<TrainIQ />);
+            } else {
+              ReactDOM.render(<TrainIQ />, rootEl);
+            }
+          } catch (e) {
+            console.error(e);
+            throw e;
+          }
+        })();
+</script>
 </body>
 </html>
