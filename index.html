@@ -35,7 +35,7 @@
     <!-- Evidence-based exercise database (used for substitutions) -->
     <script src="exercise-database.js"></script>
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect } = React;
 
         // ==================== EXERCISE DATABASE ====================
         const EXERCISE_DB = {
@@ -286,7 +286,7 @@
           if (!Array.isArray(exercises) || exercises.length < 3) return exercises;
 
           // Determine how many "main" movements to protect from supersets.
-          const mainLiftCount = (programType === 'Strength' || programType === 'Power/Speed') ? 2 : 1;
+          const mainLiftCount = programType === 'Strength' ? 2 : 1;
 
           // Eligible = non-main exercises. For Strength, only isolation work.
           const eligibleIdx = [];
@@ -294,7 +294,7 @@
             const ex = exercises[i];
             if (!ex) continue;
 
-            if (programType === 'Strength' || programType === 'Power/Speed') {
+            if (programType === 'Strength') {
               if (ex.type === 'isolation') eligibleIdx.push(i);
               continue;
             }
@@ -596,45 +596,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
             return bump(acc);
           }
 
-          
-          // ---------------- Power / Speed-Strength ----------------
-          if (programType === 'Power/Speed') {
-            const isMainish = (role === 'main' || role === 'secondary');
-            if (exType === 'compound' && isMainish) {
-              if (phaseName === 'Peak') return bump(role === 'main' ? [1, 3] : [2, 4]);
-              if (phaseName === 'Intensification') return bump([2, 5]);
-              return bump([3, 6]); // Base (still crisp, no grinding)
-            }
-            const acc = (exType === 'compound') ? [5, 8] : [8, 15];
-            return bump(acc);
-          }
-
-          // ---------------- German Volume Training (GVT) ----------------
-          if (programType === 'GVT') {
-            const isMainish = (role === 'main' || role === 'secondary');
-            if (exType === 'compound' && isMainish) return [10, 10];
-            const acc = (exType === 'compound') ? [8, 12] : [12, 20];
-            return bump(acc);
-          }
-
-          // ---------------- Density (EDT-style) ----------------
-          if (programType === 'Density') {
-            const acc = (exType === 'compound') ? [6, 10] : [10, 20];
-            return bump(acc);
-          }
-
-          // ---------------- GPP / Conditioning-Integrated ----------------
-          if (programType === 'GPP') {
-            const acc = (exType === 'compound') ? [5, 10] : [10, 18];
-            return bump(acc);
-          }
-
-          // ---------------- Specialization ----------------
-          if (programType === 'Specialization') {
-            const acc = (exType === 'compound') ? [8, 12] : [12, 25];
-            return bump(acc);
-          }
-// ---------------- Hypertrophy / Minimalist defaults ----------------
+          // ---------------- Hypertrophy / Minimalist defaults ----------------
           const ranges = {
             Hypertrophy: { compound: [6, 10], isolation: [10, 20] },
             Minimalist:  { compound: [6, 10], isolation: [12, 20] }
@@ -662,7 +624,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           const isMainish = (role === 'main' || role === 'secondary');
           const intent = dayIntent || 'mixed';
 
-          if ((programType === 'Strength' || programType === 'Power/Speed') && exType === 'compound' && isMainish) {
+          if (programType === 'Strength' && exType === 'compound' && isMainish) {
             // Strength should express intensity in peak (without forced grinders for most users)
             if (phaseName === 'Peak') rir = Math.max(0, rir - 1);
             if (phaseName === 'Intensification') rir = Math.max(0, rir - 0.5);
@@ -680,7 +642,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
 
         function getRest(minRep, exType, programType) {
           if (minRep <= 6 && exType === 'compound') {
-            return (programType === 'Strength' ? '3-5min' : (programType === 'Power/Speed' ? '2-4min' : '2-4min'));
+            return programType === 'Strength' ? '3-5min' : '2-4min';
           }
           if (exType === 'compound') return '90-180s';
           return '60-120s';
@@ -1055,159 +1017,9 @@ function getSets(experience, exType, programType) {
               Hypertrophy: { name:'Hypertrophy', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
               Strength:    { name:'Strength',    splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Strength || {}) }, daySlots: STRENGTH_SLOTS, scoring: scoringFor('Strength') },
               Powerbuilding:{ name:'Powerbuilding', splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Powerbuilding || {}) }, daySlots: POWERBUILDING_SLOTS, scoring: scoringFor('Powerbuilding') },
-              'Power/Speed':{ name:'Power/Speed', splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Strength || {}) }, daySlots: STRENGTH_SLOTS, scoring: scoringFor('Strength') },
-              Specialization:{ name:'Specialization', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
-              GVT:         { name:'GVT',         splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
-              Density:     { name:'Density',     splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
-              GPP:         { name:'GPP',         splitTemplates: DEFAULT_SPLITS, daySlots: MINIMALIST_SLOTS, scoring: scoringFor('Minimalist') },
               Minimalist:  { name:'Minimalist',  splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Minimalist || {}) }, daySlots: MINIMALIST_SLOTS, scoring: scoringFor('Minimalist') }
             };
-
           })();
-
-        // -------------------- SPLIT PREFERENCE ROUTING --------------------
-        // Allows user to override the default program-type split templates without changing the UI layout.
-        function resolveSplitPreference(pref, daysNum, autoSplit) {
-          const p = String(pref || 'Auto');
-          if (!Array.isArray(autoSplit) || autoSplit.length !== daysNum) {
-            autoSplit = Array.isArray(autoSplit) ? autoSplit.slice(0, daysNum) : [];
-          }
-
-          const LIB = {
-            'Full Body': {
-              3: ['Full','Full','Full'],
-              4: ['Full','Full','Full','Full'],
-              5: ['Full','Full','Full','Full','Full'],
-              6: ['Full','Full','Full','Full','Full','Full']
-            },
-            'Upper/Lower': {
-              3: ['Upper','Lower','Full'],
-              4: ['Upper','Lower','Upper','Lower'],
-              5: ['Upper','Lower','Upper','Lower','Upper'],
-              6: ['Upper','Lower','Upper','Lower','Upper','Lower']
-            },
-            'Push/Pull/Legs': {
-              3: ['Push','Pull','Legs'],
-              4: ['Push','Pull','Legs','Full'],
-              5: ['Push','Pull','Legs','Push','Pull'],
-              6: ['Push','Pull','Legs','Push','Pull','Legs']
-            }
-          };
-
-          if (p === 'Auto' || !LIB[p] || !LIB[p][daysNum]) return autoSplit;
-          return LIB[p][daysNum].slice(0, daysNum);
-        }
-
-
-
-        // -------------------- ADVANCED TECHNIQUE ENGINE --------------------
-        // Philosophy:
-        // - Techniques are tools, not defaults.
-        // - They are phase-limited, fatigue-budgeted, and gated by user experience.
-        // - We attach techniques to exercises as metadata for display + (optionally) set/rep tweaks.
-        const TECHNIQUE_CATALOG = {
-          drop_set:        { label: 'Drop Set',            tier: 'advanced',      fatigue: 2, description: 'After your final working set, immediately reduce the load (typically 20–30%) and continue for additional reps with controlled form. This extends the set past initial fatigue to increase metabolic stress and motor unit recruitment.' },
-          rest_pause:      { label: 'Rest-Pause',          tier: 'advanced',      fatigue: 2, description: 'Perform a near-failure set, rest briefly (10–20 seconds), then do mini-sets with the same load until you reach the target total reps. This keeps load high while accumulating more quality reps.' },
-          myo_reps:        { label: 'Myo-Reps',            tier: 'advanced',      fatigue: 2, description: 'Do one activation set close to failure, then perform a series of short-rest mini-sets (e.g., 3–5 reps) until you hit a rep target or form degrades. Similar to rest-pause but typically uses smaller mini-sets and is great for isolation work.' },
-          cluster_sets:    { label: 'Cluster Sets',        tier: 'advanced',      fatigue: 2, description: 'Break a set into small clusters with short rests inside the set (e.g., 4×(2 reps) with 15–30s between clusters). This lets you keep power/quality high with heavier loads.' },
-          fst7:            { label: 'FST-7',               tier: 'advanced',      fatigue: 2, description: 'Finish a muscle group with 7 short-rest sets (usually 8–15 reps) on a single isolation movement. The goal is a high pump and extended time-under-tension. Keep form strict and rest short (30–45s).' },
-          bfr:             { label: 'BFR',                 tier: 'advanced',      fatigue: 2, description: 'Blood Flow Restriction uses light loads with an occlusion cuff/band to partially restrict venous return. It creates a high fatigue stimulus with low joint stress. Only use with proper cuffs/bands and conservative pressure.' },
-          lengthened_partials:{ label: 'Lengthened Partials', tier: 'advanced',    fatigue: 2, description: 'Partial reps performed in the most stretched (lengthened) portion of the range of motion. This biases tension where many muscles respond strongly for hypertrophy. Use controlled tempo and stop if joint discomfort appears.' },
-          tempo_ecc:       { label: 'Slow Eccentric',      tier: 'intermediate', fatigue: 1, description: 'Slow the lowering phase (eccentric) of each rep (e.g., 3–5 seconds down). This increases time-under-tension and improves control. Keep the concentric (lifting) phase strong and stable.' },
-          pause_reps:      { label: 'Paused Reps',         tier: 'intermediate', fatigue: 1, description: 'Add a deliberate pause at the hardest point (bottom or midpoint) for 1–3 seconds before completing the rep. This builds strength out of disadvantaged positions and improves technique.' },
-          gvt_10x10:       { label: 'GVT 10×10',           tier: 'intermediate', fatigue: 2, description: 'German Volume Training: perform 10 sets of 10 reps on a main lift with the same load and short rest (commonly 60–90s). The goal is high volume with consistent technique. Start conservatively so you can complete all sets.' },
-          edt_pr_zone:     { label: 'EDT PR Zone',         tier: 'intermediate', fatigue: 2, description: 'Escalating Density Training “PR zone”: alternate two movements for a fixed time block (often 8–12 minutes) and accumulate reps. Try to beat your previous total reps next time while keeping form strict.' },
-          density_finisher:{ label: 'Density Finisher',    tier: 'intermediate', fatigue: 2, description: 'A short, high-density end-of-workout block where you reduce rest and accumulate quality reps on a safe movement. The goal is extra stimulus without heavy loading. Stop 1–2 reps shy of form breakdown.' }
-        };
-
-        function getTechniqueDetails(t) {
-          const key = t?.key || '';
-          const fromCat = (key && TECHNIQUE_CATALOG[key]) ? TECHNIQUE_CATALOG[key] : {};
-          const label = t?.label || fromCat.label || key || 'Technique';
-          const description = fromCat.description || t?.cue || 'This technique modifies how you perform the prescribed sets to increase training stimulus.';
-          const cue = t?.cue || '';
-          const tier = fromCat.tier || t?.tier || '';
-          return { key, label, description, cue, tier };
-        }
-
-        function canUseAdvancedTechniques(config) {
-          if (!config?.advancedTechniques) return false;
-          const exp = String(config?.experience || '').toLowerCase();
-          return (exp === 'intermediate' || exp === 'advanced');
-        }
-
-        function addTechnique(ex, t) {
-          if (!ex) return ex;
-          const next = { ...ex };
-          next.techniques = Array.isArray(next.techniques) ? next.techniques.slice() : [];
-          next.techniques.push(t);
-          return next;
-        }
-
-        function applyTechniqueSystem(exercises, context) {
-          const { config, programType, phaseName, dayIntent } = context || {};
-          const allow = canUseAdvancedTechniques(config);
-          if (!Array.isArray(exercises) || exercises.length === 0) return exercises;
-
-          // Always keep main lifts "clean" unless the program type explicitly demands otherwise.
-          const isDeload = phaseName === 'Deload';
-          const isPeak = phaseName === 'Peak';
-
-          let out = exercises.map(e => ({ ...e }));
-
-          // Program-type specific session systems
-          if (programType === 'GVT') {
-            // First main-ish compound becomes 10x10 with short(ish) rest.
-            const idx = out.findIndex(e => e && e.type === 'compound' && (e.role === 'main' || e.role === 'secondary'));
-            if (idx >= 0) {
-              out[idx].sets = 10;
-              out[idx].reps = [10, 10];
-              out[idx].rir = Math.max(1.5, out[idx].rir ?? 2);
-              out[idx].rest = '60-90s';
-              out[idx] = addTechnique(out[idx], { key: 'gvt_10x10', label: TECHNIQUE_CATALOG.gvt_10x10.label, cue: 'Keep load constant. Stop 1–2 reps shy of failure early; earn the last sets.' });
-            }
-            return out;
-          }
-
-          if (programType === 'Density') {
-            // Attach an EDT-style PR zone note to the first pair of accessories (keeps UI minimal).
-            const accIdx = out.map((e,i)=>({e,i})).filter(x=>x.e && x.e.role==='accessory').map(x=>x.i);
-            if (accIdx.length >= 2) {
-              out[accIdx[0]] = addTechnique(out[accIdx[0]], { key:'edt_pr_zone', label: TECHNIQUE_CATALOG.edt_pr_zone.label, cue:'10-minute PR zone: alternate with next accessory and accumulate reps. Beat last time.' });
-              out[accIdx[1]] = addTechnique(out[accIdx[1]], { key:'edt_pr_zone', label: TECHNIQUE_CATALOG.edt_pr_zone.label, cue:'Pair with previous accessory. Keep form strict.' });
-              // Slightly shorten rest to reflect density intent (but not extreme).
-              out[accIdx[0]].rest = out[accIdx[0]].type === 'compound' ? '60-120s' : '45-75s';
-              out[accIdx[1]].rest = out[accIdx[1]].type === 'compound' ? '60-120s' : '45-75s';
-            }
-            return out;
-          }
-
-          // Generic advanced technique sprinkling (gated).
-          if (!allow || isDeload || isPeak) return out;
-
-          // Fatigue budget per workout: keep this conservative.
-          let budget = 2;
-
-          // Hypertrophy-ish intents: optionally apply 1 technique to 1–2 accessories.
-          const hypertrophyish = (dayIntent === 'hypertrophy' || dayIntent === 'mixed' || dayIntent === 'density' || programType === 'Hypertrophy' || programType === 'Powerbuilding' || programType === 'Specialization');
-
-          if (hypertrophyish && budget > 0) {
-            // Candidates: accessories only, isolation preferred.
-            const candidates = out.map((e,i)=>({e,i}))
-              .filter(x => x.e && x.e.role === 'accessory')
-              .filter(x => x.e.type === 'isolation' || (Array.isArray(x.e.reps) && (x.e.reps[0] || 0) >= 8))
-              .slice(0, 3)
-              .map(x => x.i);
-
-            if (candidates.length > 0) {
-              const pick = candidates[0];
-              out[pick] = addTechnique(out[pick], { key:'drop_set', label: TECHNIQUE_CATALOG.drop_set.label, cue:'After last set, drop ~20–30% and do 8–12 controlled reps.' });
-              budget -= 2;
-            }
-          }
-
-          return out;
-        }
 
 function generateProgram(config) {
           const { experience, days, programType, oneRMs } = config;
@@ -1215,8 +1027,7 @@ function generateProgram(config) {
 
           // Program profile (drives split + slots + exercise scoring)
           const profile = PROGRAM_PROFILES[programType] || PROGRAM_PROFILES.Hypertrophy;
-          const autoSplit = (profile.splitTemplates?.[daysNum]) || (PROGRAM_PROFILES.Hypertrophy.splitTemplates?.[daysNum]) || (PROGRAM_PROFILES.Hypertrophy.splitTemplates?.[4]);
-          const split = resolveSplitPreference(config.splitPreference, daysNum, autoSplit);
+          const split = (profile.splitTemplates?.[daysNum]) || (PROGRAM_PROFILES.Hypertrophy.splitTemplates?.[daysNum]) || (PROGRAM_PROFILES.Hypertrophy.splitTemplates?.[4]);
           const scoreW = profile.scoring || PROGRAM_PROFILES.Hypertrophy.scoring;
 
 
@@ -1589,21 +1400,7 @@ function generateProgram(config) {
               return 'mixed';
             };
 
-            const dayIntent = (() => {
-                const dt = String(dayType || '');
-                if (programType === 'Powerbuilding') {
-                  return dt.includes('A') ? 'strength' : (dt.includes('B') ? 'hypertrophy' : 'mixed');
-                }
-                if (programType === 'Strength') return 'strength';
-                if (programType === 'Power/Speed') return 'power';
-                if (programType === 'GVT') return 'hypertrophy';
-                if (programType === 'Density') return 'density';
-                if (programType === 'GPP') return 'gpp';
-                if (programType === 'Specialization') return 'hypertrophy';
-                if (programType === 'Hypertrophy') return 'hypertrophy';
-                if (programType === 'Minimalist') return 'minimal';
-                return 'mixed';
-              })();
+            const dayIntent = getDayIntent();
 
             // Hard survival constraints
             const ctx = {
@@ -1844,21 +1641,9 @@ function generateProgram(config) {
             const workouts = [];
             for (let d = 0; d < daysNum; d++) {
               const dayType = split[d];
-              const dayIntent = (() => {
-                const dt = String(dayType || '');
-                if (programType === 'Powerbuilding') {
-                  return dt.includes('A') ? 'strength' : (dt.includes('B') ? 'hypertrophy' : 'mixed');
-                }
-                if (programType === 'Strength') return 'strength';
-                if (programType === 'Power/Speed') return 'power';
-                if (programType === 'GVT') return 'hypertrophy';
-                if (programType === 'Density') return 'density';
-                if (programType === 'GPP') return 'gpp';
-                if (programType === 'Specialization') return 'hypertrophy';
-                if (programType === 'Hypertrophy') return 'hypertrophy';
-                if (programType === 'Minimalist') return 'minimal';
-                return 'mixed';
-              })();// Copy block menu and re-apply week ramp to set counts
+              const dayIntent = (programType === 'Powerbuilding') ? (String(dayType).includes('A') ? 'strength' : (String(dayType).includes('B') ? 'hypertrophy' : 'mixed'))
+                                : (programType === 'Strength' ? 'strength' : (programType === 'Hypertrophy' ? 'hypertrophy' : (programType === 'Minimalist' ? 'minimal' : 'mixed')));
+              // Copy block menu and re-apply week ramp to set counts
               const baseList = blockPlans[blockIndex][d] || [];
               const exercises = baseList.map((ex, idx) => {
                 const exType = ex.type;
@@ -1879,8 +1664,7 @@ function generateProgram(config) {
               });
 
               // Apply supersets if enabled (only non-main lifts)
-              const baseExercises = config.supersets ? applySupersets(exercises, programType) : exercises;
-              const finalExercises = applyTechniqueSystem(baseExercises, { config, programType, phaseName: phase.phase, dayIntent });
+              const finalExercises = config.supersets ? applySupersets(exercises, programType) : exercises;
 
               // Suggest loads for main/secondary compound lifts with 1RM if provided
               finalExercises.forEach((ex) => {
@@ -1938,7 +1722,7 @@ function generateProgram(config) {
         function ensureProfileId() {
           let pid = getProfileIdFromHash();
           if (!pid) {
-            pid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+            pid = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
             setHashToProfile(pid);
           }
           return pid;
@@ -1979,204 +1763,6 @@ function generateProgram(config) {
           }
         };
 
-        
-        // ==================== TRAINING LOGS (Adaptive Progression) ====================
-        // Logs are stored per exercise key (stable across swaps when possible).
-        // Shape:
-        //   logs[exerciseKey] = [{ ts, week, dayNumber, dayType, programType, role, equipment, sets:[{w,r,rir}] }]
-
-        const _stableId = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
-        const _clamp = (x, a, b) => Math.max(a, Math.min(b, x));
-        function nowTs() { return Date.now(); }
-
-        function coerceNum(x) {
-          const n = Number(x);
-          return Number.isFinite(n) ? n : null;
-        }
-
-        function exerciseLogKey(ex) {
-          // Prefer originalName to keep continuity through swaps.
-          const raw = (ex && (ex.originalName || ex.name)) ? String(ex.originalName || ex.name) : '';
-          return _stableId(raw);
-        }
-
-        function percentFromRepsToFailureSafe(repsToFailure) {
-          // Defensive wrapper; fall back to a conservative curve if needed.
-          try {
-            const pct = percentFromRepsToFailure(repsToFailure);
-            return _clamp(pct, 0.30, 0.97);
-          } catch (e) {
-            // Conservative approximation: 5 RTF ~ 85%, 10 ~ 70%
-            const rtf = Math.max(1, Math.min(20, Number(repsToFailure) || 10));
-            const approx = 0.90 - (rtf - 3) * 0.03;
-            return _clamp(approx, 0.30, 0.97);
-          }
-        }
-
-        function estimateOneRMFromSet(weight, reps, rir) {
-          const w = coerceNum(weight);
-          const r = coerceNum(reps);
-          const rr = coerceNum(rir);
-          if (!w || !r) return null;
-          const repsToFailure = r + (rr || 0);
-          const pct = percentFromRepsToFailureSafe(repsToFailure);
-          if (!pct) return null;
-          return w / pct;
-        }
-
-        function inferIncrement(equipment) {
-          const e = String(equipment || '').toLowerCase();
-          if (e.includes('dumbbell')) return 5;
-          if (e.includes('barbell')) return 5;
-          if (e.includes('machine') || e.includes('cable')) return 5;
-          return 5;
-        }
-
-        function pushLogEntry(logs, ex, meta, sets) {
-          const key = exerciseLogKey(ex);
-          if (!key) return logs;
-
-          const entry = {
-            ts: nowTs(),
-            week: meta?.week ?? null,
-            dayNumber: meta?.dayNumber ?? null,
-            dayType: meta?.dayType ?? null,
-            programType: meta?.programType ?? null,
-            role: ex?.role ?? null,
-            equipment: ex?.equipment ?? null,
-            sets: Array.isArray(sets) ? sets.map(s => ({
-              w: coerceNum(s?.w),
-              r: coerceNum(s?.r),
-              rir: coerceNum(s?.rir)
-            })) : []
-          };
-
-          const next = { ...(logs || {}) };
-          const arr = Array.isArray(next[key]) ? next[key].slice() : [];
-          arr.unshift(entry);
-          // Keep only the most recent 60 entries per exercise to avoid runaway storage.
-          next[key] = arr.slice(0, 60);
-          return next;
-        }
-
-        function bestEstimatedOneRMForExercise(logs, exKey) {
-          const arr = (logs && logs[exKey]) ? logs[exKey] : null;
-          if (!Array.isArray(arr) || arr.length === 0) return null;
-
-          // Use the best set from the most recent 6 sessions.
-          const recent = arr.slice(0, 6);
-          let best = null;
-          for (const session of recent) {
-            const sets = session?.sets || [];
-            for (const s of sets) {
-              const est = estimateOneRMFromSet(s?.w, s?.r, s?.rir);
-              if (est && (!best || est > best)) best = est;
-            }
-          }
-          return best ? Math.round(best) : null;
-        }
-
-        function lastSessionForExercise(logs, exKey) {
-          const arr = (logs && logs[exKey]) ? logs[exKey] : null;
-          if (!Array.isArray(arr) || arr.length === 0) return null;
-          return arr[0];
-        }
-
-        function applyAutoprogressionToProgram(program, logs, config) {
-          if (!program || !Array.isArray(program.weeks)) return program;
-
-          const nextWeeks = program.weeks.map((wObj) => {
-            const weekObj = { ...wObj };
-            const nextWorkouts = (weekObj.workouts || []).map((wo) => {
-              const workout = { ...wo };
-              const nextExercises = (workout.exercises || []).map((ex) => {
-                if (!ex) return ex;
-                const e = { ...ex };
-                const exKey = exerciseLogKey(e);
-
-                // Main lift: adjust effective 1RM estimate, then recompute weight.
-                const isMainish = (e.role === 'main' || e.role === 'secondary') && e.type === 'compound';
-                if (isMainish && e.mainLiftKey && e.reps && e.rir != null) {
-                  const est1rm = bestEstimatedOneRMForExercise(logs, exKey);
-                  if (est1rm) {
-                    const phase = getPhaseParams(weekObj.number);
-                    const wgt = calcMainLiftWeight(est1rm, e.reps, e.rir, config?.experience, config?.programType, e.role, phase);
-                    if (wgt) e.weight = wgt;
-                  }
-                }
-
-                // Accessory: double-progression-ish adjustment to the suggested load (soft, not aggressive).
-                const last = lastSessionForExercise(logs, exKey);
-                if (last && e.weight && Array.isArray(e.reps)) {
-                  const minRep = e.reps?.[0] ?? null;
-                  const maxRep = e.reps?.[1] ?? minRep;
-                  const targetRIR = (e.rir ?? 0);
-
-                  // Consider only the best (hardest) set from the last session.
-                  let bestSet = null;
-                  for (const s of (last.sets || [])) {
-                    if (!s) continue;
-                    if (!bestSet) bestSet = s;
-                    // Prefer higher reps at same weight; then higher weight.
-                    if ((s.r || 0) > (bestSet.r || 0)) bestSet = s;
-                    else if ((s.r || 0) === (bestSet.r || 0) && (s.w || 0) > (bestSet.w || 0)) bestSet = s;
-                  }
-
-                  if (bestSet && bestSet.w) {
-                    const performedReps = bestSet.r ?? null;
-                    const performedRIR = bestSet.rir ?? null;
-
-                    const inc = inferIncrement(e.equipment);
-                    // "Easy" performance: hit top of range AND had >= targetRIR+1 in reserve → nudge load up.
-                    if (performedReps != null && maxRep != null && performedReps >= maxRep && performedRIR != null && performedRIR >= (targetRIR + 1)) {
-                      e.weight = roundWeight((Number(e.weight) || 0) + inc);
-                    }
-                    // "Hard" performance: under-shot reps AND had <= targetRIR-2 → reduce slightly to protect recovery.
-                    if (performedReps != null && minRep != null && performedReps < minRep && performedRIR != null && performedRIR <= Math.max(0, targetRIR - 2)) {
-                      e.weight = roundWeight((Number(e.weight) || 0) * 0.95);
-                    }
-                  }
-                }
-
-                // If we changed load, rebuild warmups for accuracy (display + timing).
-                if (config?.warmups?.enabled) {
-                  try {
-                    const phase = getPhaseParams(weekObj.number);
-                    const dayIntent = workout?.dayType || '';
-                    e.warmups = buildWarmupSets(e, config?.programType, phase.phase, dayIntent, config?.experience, config?.warmups);
-                  } catch (err) {}
-                }
-
-                return e;
-              });
-
-              workout.exercises = nextExercises;
-              return workout;
-            });
-
-            weekObj.workouts = nextWorkouts;
-            return weekObj;
-          });
-
-          return { ...program, weeks: nextWeeks };
-        }
-
-        // Drafts are per-program/week/day/exercise so users can type during a session and safely resume later.
-        function draftKey(programCreatedAt, week, dayNumber, exKey) {
-          return `draft:${programCreatedAt || 'p'}:${week || 'w'}:${dayNumber || 'd'}:${exKey || 'x'}`;
-        }
-
-        function getDraft(drafts, key) {
-          return drafts && drafts[key] ? drafts[key] : null;
-        }
-
-        function setDraft(drafts, key, value) {
-          const next = { ...(drafts || {}) };
-          next[key] = value;
-          return next;
-        }
-
-
         // One-time migration: if a user has legacy single-profile data, move it into the current profile.
         (function migrateLegacyStorage() {
           const legacyKey = "trainiq-pro";
@@ -2191,174 +1777,6 @@ function generateProgram(config) {
         })();
 
 
-
-        // ==================== TRAINING BLOCK STORAGE ====================
-        const trainingBlocks = {
-          get() {
-            return storage.get('trainingBlocks', []);
-          },
-
-          save(block) {
-            const blocks = trainingBlocks.get();
-            const newBlock = {
-              ...block,
-              id: block.id || `block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              savedAt: new Date().toISOString()
-            };
-            const updated = [newBlock, ...blocks].slice(0, 20);
-            storage.set('trainingBlocks', updated);
-            return newBlock;
-          },
-
-          delete(id) {
-            const blocks = trainingBlocks.get();
-            storage.set('trainingBlocks', blocks.filter(b => b.id !== id));
-          },
-
-          update(id, updates) {
-            const blocks = trainingBlocks.get();
-            const updated = blocks.map(b => b.id === id ? { ...b, ...updates } : b);
-            storage.set('trainingBlocks', updated);
-          }
-        };
-
-        function blockToCSV(block) {
-          const rows = [];
-
-          rows.push(['Training Block Export']);
-          rows.push(['Block Name', block.name || 'Unnamed Block']);
-          rows.push(['Saved', block.savedAt || 'Unknown']);
-          rows.push(['Program Type', block.program?.config?.programType || 'Unknown']);
-          rows.push([]);
-
-          rows.push(['Week', 'Phase', 'Day', 'Day Type', 'Exercise', 'Sets', 'Reps Min', 'Reps Max', 'RIR', 'Rest', 'Weight', 'Role', 'Type']);
-
-          (block.program?.weeks || []).forEach(week => {
-            (week.workouts || []).forEach(workout => {
-              (workout.exercises || []).forEach(ex => {
-                const repsMin = Array.isArray(ex.reps) ? ex.reps[0] : ex.reps;
-                const repsMax = Array.isArray(ex.reps) ? ex.reps[1] : ex.reps;
-
-                rows.push([
-                  week.number,
-                  week.phase || '',
-                  workout.dayNumber,
-                  workout.dayType || '',
-                  ex.name || '',
-                  ex.sets || '',
-                  repsMin || '',
-                  repsMax || '',
-                  ex.rir || '',
-                  ex.rest || '',
-                  ex.weight || '',
-                  ex.role || '',
-                  ex.type || ''
-                ]);
-              });
-            });
-          });
-
-          return arrayToCSV(rows);
-        }
-
-        function importBlockFromCSV(csvText) {
-          const lines = csvText.split('\n');
-          const data = lines.map(line => {
-            const cells = [];
-            let cell = '';
-            let inQuotes = false;
-
-            for (let i = 0; i < line.length; i++) {
-              const char = line[i];
-              if (char === '"') {
-                if (inQuotes && line[i + 1] === '"') {
-                  cell += '"';
-                  i++;
-                } else {
-                  inQuotes = !inQuotes;
-                }
-              } else if (char === ',' && !inQuotes) {
-                cells.push(cell);
-                cell = '';
-              } else {
-                cell += char;
-              }
-            }
-            cells.push(cell);
-            return cells;
-          });
-
-          const blockName = data[1]?.[1] || 'Imported Block';
-          const programType = data[3]?.[1] || 'Hypertrophy';
-
-          let dataStartIdx = data.findIndex(row => row[0] === 'Week');
-          if (dataStartIdx === -1) throw new Error('Invalid CSV format');
-          dataStartIdx++;
-
-          const weeks = [];
-          const weekMap = new Map();
-
-          for (let i = dataStartIdx; i < data.length; i++) {
-            const row = data[i];
-            if (!row[0] || row.length < 13) continue;
-
-            const weekNum = parseInt(row[0]);
-            const phase = row[1];
-            const dayNum = parseInt(row[2]);
-            const dayType = row[3];
-
-            if (!weekMap.has(weekNum)) {
-              const weekObj = {
-                number: weekNum,
-                phase,
-                deload: String(phase || '').toLowerCase().includes('deload'),
-                workouts: []
-              };
-              weekMap.set(weekNum, weekObj);
-              weeks.push(weekObj);
-            }
-
-            const week = weekMap.get(weekNum);
-            let workout = week.workouts.find(w => w.dayNumber === dayNum);
-
-            if (!workout) {
-              workout = {
-                dayNumber: dayNum,
-                dayType,
-                exercises: []
-              };
-              week.workouts.push(workout);
-            }
-
-            const exercise = {
-              name: row[4],
-              sets: parseInt(row[5]) || 3,
-              reps: [parseInt(row[6]) || 8, parseInt(row[7]) || 12],
-              rir: parseFloat(row[8]) || 2,
-              rest: row[9] || '90-180s',
-              weight: row[10] || null,
-              role: row[11] || 'accessory',
-              type: row[12] || 'compound'
-            };
-
-            workout.exercises.push(exercise);
-          }
-
-          weeks.sort((a, b) => a.number - b.number);
-          weeks.forEach(w => w.workouts.sort((a, b) => a.dayNumber - b.dayNumber));
-
-          return {
-            name: blockName,
-            program: {
-              weeks,
-              config: { programType },
-              createdAt: new Date().toISOString()
-            }
-          };
-        }
-
-
-
         // ==================== MAIN APP ====================
         
         function TrainIQ() {
@@ -2368,9 +1786,7 @@ function generateProgram(config) {
             days: '',
             time: '',
             programType: '',
-            splitPreference: 'Auto',
             supersets: false,
-            advancedTechniques: false,
             oneRMs: { chest: '', lats: '', shoulders: '', quads: '', hamstrings: '' },
             // Warm-up preferences
             warmups: {
@@ -2429,12 +1845,7 @@ function generateProgram(config) {
                 }} />
               )}
               {tab === 'history' && (
-                <HistoryScreen 
-                  history={history} 
-                  onDelete={(idx) => setHistory(prev => prev.filter((_, i) => i !== idx))}
-                  setProgram={setProgram}
-                  setTab={setTab}
-                />
+                <HistoryScreen history={history} onDelete={(idx) => setHistory(prev => prev.filter((_, i) => i !== idx))} />
               )}
               {tab === 'settings' && (
                 <SettingsScreen config={config} setConfig={setConfig} />
@@ -2482,119 +1893,6 @@ function generateProgram(config) {
               </div>
               
               <div className="space-y-5">
-
-              <div className="p-5 rounded-2xl glass">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-sm text-gray-400">TRAINING BLOCKS</h3>
-                  <button
-                    onClick={() => setShowBlockManager(!showBlockManager)}
-                    className="px-3 py-1 rounded-lg premium-gradient text-white text-xs font-bold btn-touch"
-                  >
-                    {showBlockManager ? 'HIDE' : 'MANAGE'}
-                  </button>
-                </div>
-
-                <p className="text-xs text-gray-500 mb-3">
-                  Save your current program as a reusable training block
-                </p>
-
-                {showBlockManager && (
-                  <div className="space-y-3 mt-4">
-                    <div className="p-3 rounded-xl bg-black/40 border border-white/10">
-                      <div className="text-xs font-bold text-gray-400 mb-2">SAVE CURRENT PROGRAM</div>
-                      <input
-                        type="text"
-                        placeholder="Block name (optional)"
-                        value={blockName}
-                        onChange={(e) => setBlockName(e.target.value)}
-                        className="w-full p-2 mb-2 rounded bg-black/50 border border-white/10 text-white text-sm outline-none focus:border-orange-500"
-                      />
-                      <button
-                        onClick={() => {
-                          const currentProgram = storage.get('state')?.program;
-                          handleSaveCurrentBlock(currentProgram);
-                        }}
-                        className="w-full px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold btn-touch"
-                      >
-                        SAVE AS BLOCK
-                      </button>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-black/40 border border-white/10">
-                      <div className="text-xs font-bold text-gray-400 mb-2">IMPORT FROM CSV</div>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".csv"
-                        onChange={handleImportBlock}
-                        className="hidden"
-                      />
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full px-3 py-2 rounded-lg glass hover:bg-white/10 text-white text-sm font-bold btn-touch"
-                      >
-                        CHOOSE CSV FILE
-                      </button>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-black/40 border border-white/10">
-                      <div className="text-xs font-bold text-gray-400 mb-3">SAVED BLOCKS ({blocks.length})</div>
-
-                      {blocks.length === 0 ? (
-                        <div className="text-xs text-gray-500 text-center py-4">
-                          No saved blocks yet
-                        </div>
-                      ) : (
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
-                          {blocks.map(block => (
-                            <div key={block.id} className="p-3 rounded-lg bg-black/60 border border-white/5">
-                              <div className="flex items-start justify-between gap-2 mb-2">
-                                <div>
-                                  <div className="font-semibold text-sm">{block.name}</div>
-                                  <div className="text-xs text-gray-400">
-                                    {block.program?.config?.programType || 'Unknown'} • 
-                                    {new Date(block.savedAt).toLocaleDateString()}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => {
-                                    const currentState = storage.get('state');
-                                    storage.set('state', {
-                                      ...currentState,
-                                      program: block.program
-                                    });
-                                    window.location.reload();
-                                  }}
-                                  className="flex-1 px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold btn-touch"
-                                >
-                                  LOAD
-                                </button>
-                                <button
-                                  onClick={() => handleExportBlock(block)}
-                                  className="px-3 py-1.5 rounded-lg glass hover:bg-white/10 text-white text-xs font-bold btn-touch"
-                                >
-                                  EXPORT
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteBlock(block.id)}
-                                  className="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-bold btn-touch"
-                                >
-                                  DELETE
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-
                 <div>
                   <label className="block text-xs font-bold text-gray-400 mb-2 tracking-wide flex items-center gap-2">
   EXPERIENCE LEVEL
@@ -2658,11 +1956,6 @@ function generateProgram(config) {
                       <option value="Hypertrophy" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Hypertrophy</option>
                       <option value="Strength" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Strength</option>
                       <option value="Powerbuilding" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Powerbuilding</option>
-                      <option value="Power/Speed" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Power / Speed-Strength</option>
-                      <option value="Specialization" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Specialization (Body-Part Focus)</option>
-                      <option value="GVT" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>German Volume Training (GVT)</option>
-                      <option value="Density" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Density (EDT-style)</option>
-                      <option value="GPP" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>GPP / Conditioning-Integrated</option>
                       <option value="Minimalist" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Minimalist</option>
                     </select>
                     <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300">
@@ -2671,32 +1964,7 @@ function generateProgram(config) {
                       </svg>
                     </div>
                   </div>
-                
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 mb-2 tracking-wide">EXERCISE SPLIT</label>
-                  <div className="relative">
-                    <select
-                      value={config.splitPreference || 'Auto'}
-                      onChange={(e) => setConfig({...config, splitPreference: e.target.value})}
-                      className="w-full p-4 pr-12 rounded-xl glass bg-black/40 text-white font-semibold border border-white/10 outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
-                    >
-                      <option value="Auto" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Auto (Recommended)</option>
-                      <option value="Full Body" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Full Body</option>
-                      <option value="Upper/Lower" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Upper / Lower</option>
-                      <option value="Push/Pull/Legs" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Push / Pull / Legs</option>
-                    </select>
-                    <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="text-[11px] text-gray-500 mt-2">
-                    Split selection changes how muscle groups are distributed across the week, while keeping the same clean UI.
-                  </div>
                 </div>
-
-</div>
                 
                 <div className="flex items-center justify-between p-4 rounded-xl glass">
                   <span className="font-semibold text-sm">SUPERSETS</span>
@@ -2706,16 +1974,7 @@ function generateProgram(config) {
                   </button>
                 </div>
                 
-                
-                <div className="flex items-center justify-between p-4 rounded-xl glass">
-                  <span className="font-semibold text-sm">ADVANCED TECHNIQUES</span>
-                  <button onClick={() => setConfig({...config, advancedTechniques: !config.advancedTechniques})}
-                    className={"w-14 h-8 rounded-full transition " + (config.advancedTechniques ? "bg-orange-500" : "bg-gray-700")}>
-                    <div className={"w-6 h-6 rounded-full bg-white transition-transform " + (config.advancedTechniques ? "translate-x-7" : "translate-x-1")}></div>
-                  </button>
-                </div>
-
-<button onClick={onGenerate} disabled={!isValid}
+                <button onClick={onGenerate} disabled={!isValid}
                   className={"w-full p-5 rounded-xl font-display font-bold text-lg transition btn-touch " +
                     (isValid ? "premium-gradient text-white shadow-xl" : "glass text-gray-600 cursor-not-allowed")}>
                   GENERATE PROGRAM
@@ -2729,18 +1988,6 @@ function generateProgram(config) {
         
         function WorkoutsScreen({ program, config, setProgram, onSave }) {
           const [week, setWeek] = useState(1);
-
-          const [logs, setLogs] = useState(() => storage.get('logs', {}));
-          const [drafts, setDrafts] = useState(() => storage.get('drafts', {}));
-
-          useEffect(() => { storage.set('logs', logs); }, [logs]);
-          useEffect(() => { storage.set('drafts', drafts); }, [drafts]);
-
-          // Apply adaptive progression to the in-memory program anytime fresh logs arrive.
-          useEffect(() => {
-            if (typeof setProgram !== 'function') return;
-            setProgram(prev => applyAutoprogressionToProgram(prev, logs, config));
-          }, [logs, config?.experience, config?.programType, config?.warmups?.enabled]);
           const currentWeek = program.weeks[week - 1];
 
           // Persist per-workout edits (swap / delete / set +/-) back into the program
@@ -2797,17 +2044,7 @@ function generateProgram(config) {
               <div className="px-4 py-4 space-y-3">
                 {currentWeek.workouts.map((workout, i) => (
                   // IMPORTANT: use a stable key so WorkoutCard state doesn't bleed across week/day changes.
-                  <WorkoutCard
-                      key={`${week}-${workout.dayNumber}`}
-                      workout={workout}
-                      warmupPrefs={config?.warmups}
-                      logs={logs}
-                      drafts={drafts}
-                      meta={{ week, dayNumber: workout.dayNumber, dayType: workout.dayType, programType: config?.programType, programCreatedAt: program?.createdAt }}
-                      onLogsChange={setLogs}
-                      onDraftsChange={setDrafts}
-                      onUpdateExercises={(next) => updateWorkoutExercises(i, next)}
-                    />
+                  <WorkoutCard key={`${week}-${workout.dayNumber}`} workout={workout} warmupPrefs={config?.warmups} onUpdateExercises={(next) => updateWorkoutExercises(i, next)} />
                 ))}
               </div>
             </div>
@@ -2816,7 +2053,7 @@ function generateProgram(config) {
 
         // ==================== WORKOUT CARD ====================
         
-        function WorkoutCard({ workout, warmupPrefs, logs, drafts, meta, onLogsChange, onDraftsChange, onUpdateExercises }) {
+        function WorkoutCard({ workout, warmupPrefs, onUpdateExercises }) {
           const [open, setOpen] = useState(false);
           // Keep a local copy so swaps don't mutate the generated program state.
           // IMPORTANT: this must resync whenever "workout" changes (week switch, regen, etc.)
@@ -2970,97 +2207,6 @@ function generateProgram(config) {
 
   const ExerciseCard = ({ ex, index, showRest = true, ssOrder = null, canSwap = true }) => {
     const role = roleLabel(ex.role);
-    const exKey = exerciseLogKey(ex);
-    const dKey = draftKey(meta?.programCreatedAt, meta?.week, meta?.dayNumber, exKey);
-
-    // FIX: Add refs to prevent keyboard closing
-    const editingRef = useRef(false);
-    const commitTimerRef = useRef(null);
-
-    const buildEmptySets = (n) => Array.from({ length: Math.max(1, n || 1) }).map(() => ({ w: '', r: '', rir: '' }));
-
-    const [draftData, setDraftData] = useState(() => {
-      const existing = getDraft(drafts, dKey);
-      const sets = existing?.sets && Array.isArray(existing.sets) ? existing.sets : buildEmptySets(ex.sets);
-      return { sets: sets.slice(0, ex.sets || sets.length), _lastLoggedTs: existing?._lastLoggedTs || null };
-    });
-
-    // iOS keyboard stability: keep keystrokes out of React state (use a ref while typing)
-    const draftRef = useRef(null);
-    useEffect(() => { draftRef.current = draftData; }, [draftData]);
-
-
-    const [techModal, setTechModal] = useState(null);
-
-
-    useEffect(() => {
-      const existing = getDraft(drafts, dKey);
-      const sets = existing?.sets && Array.isArray(existing.sets) ? existing.sets : buildEmptySets(ex.sets);
-      setDraftData({ sets: sets.slice(0, ex.sets || sets.length), _lastLoggedTs: existing?._lastLoggedTs || null });
-    }, [dKey, ex.sets]);
-
-    // FIX: Cleanup timer on unmount
-    useEffect(() => {
-      return () => {
-        if (commitTimerRef.current) {
-          clearTimeout(commitTimerRef.current);
-        }
-      };
-    }, []);
-
-    const setDraftField = (setIdx, field, value) => {
-      // Do not call setState here (iOS Safari may drop focus/close the keypad).
-      editingRef.current = true;
-
-      const cur = draftRef.current || draftData || {};
-      const next = { ...(cur || {}) };
-      const sets = Array.isArray(next.sets) ? next.sets.slice() : buildEmptySets(ex.sets);
-      while (sets.length < (ex.sets || 1)) sets.push({ w: '', r: '', rir: '' });
-      const row = { ...(sets[setIdx] || { w: '', r: '', rir: '' }) };
-      row[field] = value;
-      sets[setIdx] = row;
-      next.sets = sets;
-      draftRef.current = next;
-    };
-
-    const flushDraftAndPersist = () => {
-      const next = draftRef.current || draftData;
-      if (!next) return;
-      // Safe to update state on blur/Done.
-      setDraftData(next);
-      if (typeof onDraftsChange === 'function') {
-        onDraftsChange(dPrev => setDraft(dPrev, dKey, next));
-      }
-    };
-
-
-    const tryCommitLog = () => {
-      // Log only if at least one set has a weight+reps.
-      const src = (draftRef.current || draftData) || {};
-      const sets = (src?.sets || []).map(s => ({ w: coerceNum(s?.w), r: coerceNum(s?.r), rir: coerceNum(s?.rir) }))
-        .filter(s => s.w != null || s.r != null || s.rir != null);
-
-      const meaningful = sets.some(s => (s.w != null && s.r != null));
-      if (!meaningful) return;
-
-      const now = nowTs();
-      const last = (src?._lastLoggedTs || 0);
-      // Prevent spam: only allow a commit every 30 seconds per exercise.
-      if (now - last < 30000) return;
-
-      if (typeof onLogsChange === 'function') {
-        onLogsChange(prev => pushLogEntry(prev, ex, meta, sets));
-      }
-      // Mark draft as logged so refresh/blur doesn't re-log immediately.
-      setDraftData(prev => {
-        const next = { ...(prev || {}) };
-        next._lastLoggedTs = now;
-        if (typeof onDraftsChange === 'function') {
-          onDraftsChange(dPrev => setDraft(dPrev, dKey, next));
-        }
-        return next;
-      });
-    };
     return (
       <div className="p-3 rounded-lg bg-black/50 border border-white/5">
         <div className="flex items-start justify-between gap-2 mb-2">
@@ -3146,88 +2292,7 @@ function generateProgram(config) {
           </span>
         </div>
 
-        
-        {Array.isArray(ex.techniques) && ex.techniques.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 text-xs mb-2">
-            {ex.techniques.map((t, i) => {
-              const details = getTechniqueDetails(t);
-              return (
-                <span key={i} className="px-2 py-1 bg-emerald-500/15 text-emerald-300 rounded font-bold inline-flex items-center">
-                  <span className="opacity-75 font-extrabold tracking-wider mr-1">TECH</span>
-                  <span>{details.label}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTechModal(details); }}
-                    className="ml-2 w-4 h-4 rounded-full border border-emerald-400/30 bg-emerald-500/10 text-emerald-200 flex items-center justify-center text-[10px] leading-none hover:bg-emerald-500/20 btn-touch"
-                    aria-label={`About ${details.label}`}
-                    title={`What is ${details.label}?`}
-                  >
-                    i
-                  </button>
-                </span>
-              );
-            })}
-          </div>
-        )}
-
-        {techModal && (
-          <div
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-            role="dialog"
-            aria-modal="true"
-            onClick={() => setTechModal(null)}
-          >
-            <div className="absolute inset-0 bg-black/70" />
-            <div
-              className="relative w-full max-w-md rounded-2xl glass p-4"
-              onClick={(e) => { e.stopPropagation(); }}
-            >
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div>
-                  <div className="text-[11px] text-emerald-300 font-bold tracking-wider uppercase">Technique</div>
-                  <div className="text-lg font-semibold leading-tight">{techModal.label}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setTechModal(null)}
-                  className="w-9 h-9 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center btn-touch"
-                  aria-label="Close"
-                  title="Close"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="text-sm text-gray-200 leading-relaxed">
-                {techModal.description}
-              </div>
-
-              {techModal.cue && (
-                <div className="mt-3 p-3 rounded-xl bg-black/40 border border-white/10">
-                  <div className="text-[11px] text-gray-400 font-bold tracking-wider uppercase mb-1">How to apply</div>
-                  <div className="text-sm text-gray-200">{techModal.cue}</div>
-                </div>
-              )}
-
-              <div className="mt-3 flex items-center justify-between">
-                {techModal.tier && (
-                  <span className="text-[11px] font-bold px-2 py-1 rounded bg-white/5 border border-white/10 text-gray-300">
-                    {String(techModal.tier).toUpperCase()}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setTechModal(null)}
-                  className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-semibold btn-touch"
-                >
-                  Got it
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-<div className="text-[11px] text-gray-500 mb-3 -mt-1">
+        <div className="text-[11px] text-gray-500 mb-3 -mt-1">
           Target effort: finish each set with about <span className="font-bold text-gray-300">{ex.rir}</span> reps in reserve (RIR).
         </div>
 
@@ -3254,64 +2319,19 @@ function generateProgram(config) {
 
         <div className="space-y-2">
           {Array.from({length: ex.sets}).map((_, setIdx) => (
-            <div key={`${dKey}-set-${setIdx}`} className="flex items-center gap-2 p-2 rounded bg-black/30">
+            <div key={setIdx} className="flex items-center gap-2 p-2 rounded bg-black/30">
               <span className="text-xs font-bold text-gray-500 w-12">Set {setIdx + 1}</span>
               <div className="flex flex-col items-center w-20 sm:w-24">
                 {ex.weight && <div className="text-[10px] font-bold text-green-400 -mb-1">~{ex.weight}</div>}
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  pattern="[0-9]*[.,]?[0-9]*"
-                  enterKeyHint="done"
-                  placeholder="lbs"
-                  defaultValue={(draftData.sets?.[setIdx]?.w ?? '')}
-                  onChange={(e) => setDraftField(setIdx, 'w', e.target.value)}
-                  onBlur={() => { flushDraftAndPersist(); editingRef.current = false; tryCommitLog(); }}
-                  onKeyDown={(e) => { 
-                    if (e.key === "Enter") {
-                      e.currentTarget.blur();
-                      editingRef.current = false;
-                      tryCommitLog();
-                    }
-                  }}
-                  className="w-full p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
-                />
+                <input type="number" placeholder="lbs"
+                className="w-full p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
+              />
               </div>
               <span className="text-xs text-gray-600">×</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                enterKeyHint="done"
-                placeholder="reps"
-                defaultValue={(draftData.sets?.[setIdx]?.r ?? '')}
-                onChange={(e) => setDraftField(setIdx, 'r', e.target.value)}
-                  onBlur={() => { flushDraftAndPersist(); editingRef.current = false; tryCommitLog(); }}
-                onKeyDown={(e) => { 
-                    if (e.key === "Enter") {
-                      e.currentTarget.blur();
-                      editingRef.current = false;
-                      tryCommitLog();
-                    }
-                  }}
+              <input type="number" placeholder="reps"
                 className="w-20 sm:w-24 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
               />
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                enterKeyHint="done"
-                placeholder="RIR"
-                defaultValue={(draftData.sets?.[setIdx]?.rir ?? '')}
-                onChange={(e) => setDraftField(setIdx, 'rir', e.target.value)}
-                  onBlur={() => { flushDraftAndPersist(); editingRef.current = false; tryCommitLog(); }}
-                onKeyDown={(e) => { 
-                    if (e.key === "Enter") {
-                      e.currentTarget.blur();
-                      editingRef.current = false;
-                      tryCommitLog();
-                    }
-                  }}
+              <input type="number" placeholder="RIR" min="0" max="6"
                 className="w-16 p-2 rounded bg-black/50 border border-white/10 text-white text-sm text-center outline-none focus:border-orange-500"
               />
             </div>
@@ -3478,126 +2498,7 @@ function generateProgram(config) {
 
         // ==================== HISTORY SCREEN ====================
         
-        // ==================== CSV EXPORT FUNCTIONS ====================
-function escapeCSV(str) {
-  if (str == null) return '';
-  const s = String(str);
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-    return '"' + s.replace(/"/g, '""') + '"';
-  }
-  return s;
-}
-
-function programToCSVRows(program) {
-  const rows = [];
-  const config = program.config || {};
-
-  rows.push(['Program Type', config.programType || 'Unknown']);
-  rows.push(['Experience', config.experience || 'Unknown']);
-  rows.push(['Days Per Week', config.days || 'Unknown']);
-  rows.push(['Session Length', config.time || 'Unknown']);
-  rows.push(['Created', program.createdAt || 'Unknown']);
-  rows.push([]);
-
-  rows.push(['Week', 'Phase', 'Day', 'Day Type', 'Exercise', 'Sets', 'Reps Min', 'Reps Max', 'RIR', 'Rest', 'Weight', 'Role', 'Type']);
-
-  (program.weeks || []).forEach(week => {
-    (week.workouts || []).forEach(workout => {
-      (workout.exercises || []).forEach(ex => {
-        const repsMin = Array.isArray(ex.reps) ? ex.reps[0] : ex.reps;
-        const repsMax = Array.isArray(ex.reps) ? ex.reps[1] : ex.reps;
-
-        rows.push([
-          week.number,
-          week.phase || '',
-          workout.dayNumber,
-          workout.dayType || '',
-          ex.name || '',
-          ex.sets || '',
-          repsMin || '',
-          repsMax || '',
-          ex.rir || '',
-          ex.rest || '',
-          ex.weight || '',
-          ex.role || '',
-          ex.type || ''
-        ]);
-      });
-    });
-  });
-
-  return rows;
-}
-
-function arrayToCSV(rows) {
-  return rows.map(row => 
-    row.map(cell => escapeCSV(cell)).join(',')
-  ).join('\n');
-}
-
-function downloadCSV(csvContent, filename) {
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  link.style.visibility = 'hidden';
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  URL.revokeObjectURL(url);
-}
-
-function HistoryScreen({ history, onDelete, setProgram, setTab }) {
-          const handleExportAll = () => {
-            if (!history || history.length === 0) {
-              alert('No programs to export');
-              return;
-            }
-
-            try {
-              let allRows = [['TrainIQ Program History Export']];
-              allRows.push(['Export Date', new Date().toISOString()]);
-              allRows.push([]);
-
-              history.forEach((program, idx) => {
-                if (idx > 0) allRows.push([]);
-                allRows.push([`========== Program ${idx + 1} ==========`]);
-                allRows.push([]);
-
-                const programRows = programToCSVRows(program);
-                allRows = allRows.concat(programRows);
-              });
-
-              const csv = arrayToCSV(allRows);
-              const timestamp = new Date().toISOString().split('T')[0];
-              downloadCSV(csv, `TrainIQ_History_${timestamp}.csv`);
-
-              alert('Export successful! Check your downloads folder.');
-            } catch (error) {
-              console.error('Export error:', error);
-              alert('Export failed. Please try again.');
-            }
-          };
-
-          const handleExportSingle = (program, index) => {
-            try {
-              const rows = programToCSVRows(program);
-              const csv = arrayToCSV(rows);
-              const timestamp = new Date().toISOString().split('T')[0];
-              const programType = program.config?.programType || 'Program';
-              downloadCSV(csv, `TrainIQ_${programType}_${timestamp}.csv`);
-
-              alert('Export successful!');
-            } catch (error) {
-              console.error('Export error:', error);
-              alert('Export failed. Please try again.');
-            }
-          };
-
+        function HistoryScreen({ history, onDelete }) {
           if (history.length === 0) {
             return (
               <div className="min-h-screen flex items-center justify-center content-with-tabs px-4">
@@ -3614,52 +2515,16 @@ function HistoryScreen({ history, onDelete, setProgram, setTab }) {
           
           return (
             <div className="content-with-tabs px-4 py-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-display font-bold">HISTORY</h2>
-                {history.length > 0 && (
-                  <button 
-                    onClick={handleExportAll}
-                    className="px-4 py-2 rounded-lg premium-gradient text-white text-xs font-bold btn-touch"
-                  >
-                    EXPORT ALL
-                  </button>
-                )}
-              </div>
+              <h2 className="text-2xl font-display font-bold mb-4">HISTORY</h2>
               <div className="space-y-3">
                 {history.map((prog, idx) => (
                   <div key={idx} className="p-4 rounded-xl glass">
-                    <div className="flex justify-between items-start mb-3">
+                    <div className="flex justify-between items-start mb-2">
                       <div>
                         <h3 className="font-bold text-sm">{prog.config.programType}</h3>
-                        <p className="text-xs text-gray-400">
-                          {new Date(prog.createdAt).toLocaleDateString()} • 
-                          {prog.weeks?.length || 0} weeks
-                        </p>
+                        <p className="text-xs text-gray-400">{new Date(prog.createdAt).toLocaleDateString()}</p>
                       </div>
-                      <button 
-                        onClick={() => onDelete(idx)} 
-                        className="text-red-400 text-xl hover:text-red-300"
-                      >
-                        ×
-                      </button>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          setProgram(prog);
-                          setTab('workouts');
-                        }}
-                        className="flex-1 px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold btn-touch"
-                      >
-                        RELOAD
-                      </button>
-                      <button
-                        onClick={() => handleExportSingle(prog, idx)}
-                        className="px-4 py-2 rounded-lg glass hover:bg-white/10 text-white text-sm font-bold btn-touch"
-                      >
-                        EXPORT
-                      </button>
+                      <button onClick={() => onDelete(idx)} className="text-red-400 text-xl">×</button>
                     </div>
                   </div>
                 ))}
@@ -3673,79 +2538,7 @@ function HistoryScreen({ history, onDelete, setProgram, setTab }) {
         function SettingsScreen({ config, setConfig }) {
           const [showProfileLinkInfo, setShowProfileLinkInfo] = React.useState(false);
 
-          
-
-          const [showBlockManager, setShowBlockManager] = React.useState(false);
-          const [blocks, setBlocks] = React.useState(() => trainingBlocks.get());
-          const [blockName, setBlockName] = React.useState('');
-          const fileInputRef = React.useRef(null);
-
-          const refreshBlocks = () => {
-            setBlocks(trainingBlocks.get());
-          };
-
-          const handleSaveCurrentBlock = (program) => {
-            if (!program) {
-              alert('No active program to save');
-              return;
-            }
-
-            const name = blockName.trim() || `Block ${new Date().toLocaleDateString()}`;
-            const block = {
-              name,
-              program: { ...program }
-            };
-
-            trainingBlocks.save(block);
-            setBlockName('');
-            refreshBlocks();
-            alert('Training block saved!');
-          };
-
-          const handleDeleteBlock = (id) => {
-            if (confirm('Delete this training block?')) {
-              trainingBlocks.delete(id);
-              refreshBlocks();
-            }
-          };
-
-          const handleExportBlock = (block) => {
-            try {
-              const csv = blockToCSV(block);
-              const filename = `${block.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
-              downloadCSV(csv, filename);
-              alert('Block exported successfully!');
-            } catch (error) {
-              console.error('Export error:', error);
-              alert('Export failed');
-            }
-          };
-
-          const handleImportBlock = (event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              try {
-                const csvText = e.target.result;
-                const block = importBlockFromCSV(csvText);
-                trainingBlocks.save(block);
-                refreshBlocks();
-                alert('Block imported successfully!');
-              } catch (error) {
-                console.error('Import error:', error);
-                alert('Import failed: Invalid CSV format');
-              }
-            };
-            reader.readAsText(file);
-
-            if (fileInputRef.current) {
-              fileInputRef.current.value = '';
-            }
-          };
-
-return (
+          return (
             <div className="content-with-tabs px-4 py-6">
               <h2 className="text-2xl font-display font-bold mb-1">PROFILE</h2>
               <p className="text-xs text-gray-500 mb-6">Preferences & lifting numbers</p>
@@ -3763,9 +2556,8 @@ return (
                     ].map(({key, label}) => (
                       <div key={key} className="flex justify-between items-center">
                         <span className="text-sm">{label}:</span>
-                        <input type="text" inputMode="numeric" pattern="[0-9]*" enterKeyHint="done" value={config.oneRMs[key]} placeholder="0"
+                        <input type="number" value={config.oneRMs[key]} placeholder="0"
                           onChange={(e) => setConfig({...config, oneRMs: {...config.oneRMs, [key]: e.target.value}})}
-                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                           className="w-20 p-2 rounded bg-black/50 border border-white/10 text-white text-center outline-none focus:border-orange-500"
                         />
                       </div>
@@ -4045,8 +2837,52 @@ return (
           );
         }
 
+
+        // ==================== RUNTIME ERROR GUARD (only shows on crash) ====================
+        (function(){
+          const showErr = (msg) => {
+            try {
+              let el = document.getElementById('trainiq-error-overlay');
+              if (!el) {
+                el = document.createElement('div');
+                el.id = 'trainiq-error-overlay';
+                el.style.position = 'fixed';
+                el.style.inset = '0';
+                el.style.background = 'rgba(0,0,0,0.92)';
+                el.style.zIndex = '999999';
+                el.style.padding = '16px';
+                el.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+                el.style.color = '#fff';
+                el.style.overflow = 'auto';
+                el.innerHTML =
+                  '<div style="max-width:720px;margin:0 auto;padding:20px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(255,255,255,0.04)">' +
+                    '<div style="font-weight:800;letter-spacing:0.04em;margin-bottom:10px">TrainIQ hit an error</div>' +
+                    '<div style="font-size:12px;color:rgba(255,255,255,0.75);margin-bottom:10px">This screen only appears if the app crashes. Screenshot this and send it to me.</div>' +
+                    '<pre id="trainiq-error-text" style="white-space:pre-wrap;font-size:12px;line-height:1.35;background:rgba(0,0,0,0.35);padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.08)"></pre>' +
+                    '<button id="trainiq-error-reload" style="margin-top:12px;padding:10px 14px;border-radius:12px;border:0;background:#3b82f6;color:white;font-weight:800">Reload</button>' +
+                  '</div>';
+                document.body.appendChild(el);
+                document.getElementById('trainiq-error-reload').onclick = () => location.reload();
+              }
+              const pre = document.getElementById('trainiq-error-text');
+              if (pre) pre.textContent = msg;
+            } catch (e) {}
+          };
+
+          window.addEventListener('error', (e) => {
+            const msg = (e && e.error && e.error.stack) ? e.error.stack : (e && e.message) ? e.message : String(e);
+            showErr(msg);
+          });
+
+          window.addEventListener('unhandledrejection', (e) => {
+            const reason = e && e.reason;
+            const msg = (reason && reason.stack) ? reason.stack : (reason && reason.message) ? reason.message : String(reason);
+            showErr(msg);
+          });
+        })();
+
         ensureProfileId();
-        ReactDOM.render(<TrainIQ />, document.getElementById('root'));
+        try { ReactDOM.render(<TrainIQ />, document.getElementById('root')); } catch (e) { console.error(e); throw e; }
     </script>
 </body>
 </html>
