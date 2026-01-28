@@ -15,11 +15,7 @@
         body { margin: 0; font-family: 'Inter', sans-serif; background: #050505; color: #fff; }
         .font-display { font-family: 'Antonio', sans-serif; text-transform: uppercase; letter-spacing: 0.02em; }
         .tab-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; backdrop-filter: blur(24px); }
-        /* iOS Safari + fixed tab bar needs extra breathing room (safe area + browser UI). */
-        .content-with-tabs { padding-bottom: calc(120px + env(safe-area-inset-bottom)); min-height: 100vh; }
-        /* Keep critical actions (e.g., Clear All Data) reachable above the fixed tab bar. */
-        /* Place sticky actions comfortably above the tab bar on iPhone (tab bar + home indicator). */
-        .sticky-clear { position: sticky; bottom: calc(132px + env(safe-area-inset-bottom)); z-index: 10; }
+        .content-with-tabs { padding-bottom: calc(72px + env(safe-area-inset-bottom)); min-height: 100vh; }
         .glass { background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.10); box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
         .premium-gradient { background: linear-gradient(135deg, #f97316 0%, #dc2626 100%); }
         .app-bg {
@@ -290,7 +286,7 @@
           if (!Array.isArray(exercises) || exercises.length < 3) return exercises;
 
           // Determine how many "main" movements to protect from supersets.
-          const mainLiftCount = baseProgramType(programType) === 'Strength' ? 2 : 1;
+          const mainLiftCount = programType === 'Strength' ? 2 : 1;
 
           // Eligible = non-main exercises. For Strength, only isolation work.
           const eligibleIdx = [];
@@ -298,19 +294,7 @@
             const ex = exercises[i];
             if (!ex) continue;
 
-            if (baseProgramType(programType) === 'Strength') {
-            // Variant: Power / Speed-Strength (keep loads high, reps lower, preserve bar speed)
-            if (programType === 'Power / Speed-Strength') {
-              const isMainish = (role === 'main' || role === 'secondary');
-              if (exType === 'compound' && isMainish) {
-                if (phaseName === 'Peak') return bump([1, 3]);
-                if (phaseName === 'Intensification') return bump([2, 4]);
-                return bump([3, 5]); // Base
-              }
-              if (exType === 'compound') return bump([5, 8]);
-              return bump([8, 12]);
-            }
-
+            if (programType === 'Strength') {
               if (ex.type === 'isolation') eligibleIdx.push(i);
               continue;
             }
@@ -446,18 +430,7 @@
           return Math.max(0.30, 1 / (1 + (r / 30)));
         }
 
-        function baseProgramType(programType) {
-            const VARIANTS = {
-              'Power / Speed-Strength': 'Strength',
-              'Specialization (Body-Part Focus)': 'Hypertrophy',
-              'German Volume Training (GVT)': 'Hypertrophy',
-              'Density (EDT-style)': 'Hypertrophy',
-              'GPP / Conditioning-Integrated': 'Hypertrophy'
-            };
-            return VARIANTS[programType] || programType || 'Hypertrophy';
-          }
-
-          function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+        function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
         
         function oneRMKeyForExercise(ex) {
@@ -509,7 +482,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
 
           // Main lifts bias to the lower end of the rep range in strength/powerbuilding.
           const baseReps =
-            (role === 'main' && (baseProgramType(programType) === 'Strength' || baseProgramType(programType) === 'Powerbuilding'))
+            (role === 'main' && (programType === 'Strength' || programType === 'Powerbuilding'))
               ? minRep
               : Math.round((minRep + maxRep) / 2);
 
@@ -587,7 +560,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           const bump = (r) => (position === 0 ? r : [r[0] + 2, r[1] + 3]);
 
           // ---------------- Strength ----------------
-          if (baseProgramType(programType) === 'Strength') {
+          if (programType === 'Strength') {
             const isMainish = (role === 'main' || role === 'secondary');
             if (exType === 'compound' && isMainish) {
               // Classic block periodization
@@ -601,7 +574,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           }
 
           // ---------------- Powerbuilding ----------------
-          if (baseProgramType(programType) === 'Powerbuilding') {
+          if (programType === 'Powerbuilding') {
             const isMainish = (role === 'main' || role === 'secondary');
             const intent = dayIntent || 'mixed';
 
@@ -635,21 +608,6 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
 
         
         function getRIR(experience, exType, setNum, totalSets, programType = 'Hypertrophy', role = 'accessory', phaseName = 'Base', dayIntent = null) {
-          // Variant overrides (keep the rest of the logic intact)
-          if (programType === 'Power / Speed-Strength') {
-            // Keep bar speed: generally 2+ RIR on most work, slightly closer in Peak
-            if (phaseName === 'Peak') return 1;
-            return 2;
-          }
-          if (programType === 'German Volume Training (GVT)') {
-            // High volume tolerance, keep reps in reserve
-            return 2;
-          }
-          if (programType === 'Density (EDT-style)') {
-            // Submaximal, driven by density not failure
-            return 2;
-          }
-
           // Base effort by training age
           const base = {
             Beginner: { compound: 3, isolation: 2 },
@@ -666,13 +624,13 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           const isMainish = (role === 'main' || role === 'secondary');
           const intent = dayIntent || 'mixed';
 
-          if (baseProgramType(programType) === 'Strength' && exType === 'compound' && isMainish) {
+          if (programType === 'Strength' && exType === 'compound' && isMainish) {
             // Strength should express intensity in peak (without forced grinders for most users)
             if (phaseName === 'Peak') rir = Math.max(0, rir - 1);
             if (phaseName === 'Intensification') rir = Math.max(0, rir - 0.5);
           }
 
-          if (baseProgramType(programType) === 'Powerbuilding' && exType === 'compound' && isMainish) {
+          if (programType === 'Powerbuilding' && exType === 'compound' && isMainish) {
             if (phaseName === 'Peak' && intent !== 'hypertrophy') rir = Math.max(0, rir - 1);
             if (intent === 'hypertrophy') rir = Math.min(3, rir + 0.5); // keep technique clean on volume days
           }
@@ -682,24 +640,82 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
         }
 
 
-        function getRest(minRep, exType, programType) {
-          // Program-type variants
-          if (programType === 'Density (EDT-style)') {
-            if (exType === 'compound') return (minRep <= 8 ? '60-90s' : '45-75s');
-            return '30-60s';
+        
+        // ==================== ADVANCED TECHNIQUE LOGIC ====================
+        // Applied only when enabled, and only to "safe" accessory work (mostly isolations).
+        // These are optional training methods to add variety/density without compromising main lift quality.
+        const ADV_TECHNIQUES = [
+          {
+            id: 'drop_set',
+            name: 'Drop Set',
+            level: 'Advanced',
+            description: 'After your final working set, immediately reduce the load (typically 20–30%) and continue for additional controlled reps. This increases metabolic stress and extends the set past initial fatigue.',
+            howToApply: 'After last set, drop ~20–30% and do 8–12 controlled reps.'
+          },
+          {
+            id: 'rest_pause',
+            name: 'Rest-Pause',
+            level: 'Advanced',
+            description: 'Perform a near-failure set, rest briefly (10–20s), then do mini-sets with the same load until the rep quality drops. Great for time-efficient hypertrophy.',
+            howToApply: 'Do 1 set near failure, rest 10–20s, then 2–4 mini-sets of 3–5 reps.'
+          },
+          {
+            id: 'myo_reps',
+            name: 'Myo-Reps',
+            level: 'Advanced',
+            description: 'Do an activation set close to failure, then short-rest mini-sets. Similar to rest-pause but typically used with higher reps and isolation work.',
+            howToApply: 'Activation set 12–20 reps (0–2 RIR), rest 10–15s, then 3–5 mini-sets of 3–5 reps.'
+          },
+          {
+            id: 'tempo',
+            name: 'Tempo',
+            level: 'Intermediate',
+            description: 'Control the eccentric (lowering) phase to increase time under tension and improve technique.',
+            howToApply: 'Use a 3-second controlled lowering on all reps.'
           }
-          if (programType === 'German Volume Training (GVT)') {
-            if (exType === 'compound') return '60-90s';
-            return '45-75s';
-          }
-          if (programType === 'Power / Speed-Strength') {
-            if (exType === 'compound') return '3-6min';
-            return '2-3min';
-          }
+        ];
 
+        function pickTechniqueForExercise(ex, programType, dayIntent) {
+          // Prefer drop set / myo-reps for higher reps; tempo for moderate reps; rest-pause for density.
+          const minRep = Array.isArray(ex.reps) ? ex.reps[0] : 8;
+          if (programType === 'Density (EDT-style)' || dayIntent === 'mixed') return ADV_TECHNIQUES.find(t => t.id === 'rest_pause') || ADV_TECHNIQUES[0];
+          if (minRep >= 12) return ADV_TECHNIQUES.find(t => t.id === 'drop_set') || ADV_TECHNIQUES[0];
+          if (minRep >= 10) return ADV_TECHNIQUES.find(t => t.id === 'myo_reps') || ADV_TECHNIQUES[0];
+          return ADV_TECHNIQUES.find(t => t.id === 'tempo') || ADV_TECHNIQUES[0];
+        }
 
+        function applyAdvancedTechniques(exercises, cfg, phaseName, dayIntent) {
+          if (!cfg || !cfg.advancedTechniques) return exercises;
+          const programType = cfg.programType || '';
+          const experience = cfg.experience || '';
+          // Guardrails: avoid adding techniques during peak strength, and avoid for strict Strength / Power blocks.
+          if (programType === 'Strength' || programType === 'Power / Speed-Strength') return exercises;
+          if (phaseName === 'Peak' && (programType === 'Powerbuilding' || programType === 'Strength')) return exercises;
+
+          // Eligibility: mostly accessories/isolations, and only some of them.
+          const isAllowed = (ex) => {
+            if (!ex || ex.role === 'main' || ex.role === 'secondary') return false;
+            if (ex.type !== 'isolation') return false; // keep conservative
+            // If experience isn't advanced, keep frequency lower.
+            return true;
+          };
+
+          // Determine frequency. Advanced lifters can handle more.
+          const baseP = (experience === 'advanced') ? 0.35 : (experience === 'intermediate' ? 0.22 : 0.12);
+
+          return exercises.map((ex, idx) => {
+            if (!isAllowed(ex)) return ex;
+            // Avoid techniques on the first accessory if it is low-rep or fatigue heavy.
+            const p = baseP * (idx <= 1 ? 0.7 : 1.0);
+            if (Math.random() > p) return ex;
+            const tech = pickTechniqueForExercise(ex, programType, dayIntent);
+            return { ...ex, technique: tech };
+          });
+        }
+
+function getRest(minRep, exType, programType) {
           if (minRep <= 6 && exType === 'compound') {
-            return baseProgramType(programType) === 'Strength' ? '3-5min' : '2-4min';
+            return programType === 'Strength' ? '3-5min' : '2-4min';
           }
           if (exType === 'compound') return '90-180s';
           return '60-120s';
@@ -718,7 +734,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
 
           const exType = ex?.type || 'compound';
           const role = ex?.role || 'accessory';
-          const intent = dayIntent || (baseProgramType(programType) === 'Powerbuilding' ? 'mixed' : (baseProgramType(programType) === 'Hypertrophy' ? 'hypertrophy' : (baseProgramType(programType) === 'Strength' ? 'strength' : 'mixed')));
+          const intent = dayIntent || (programType === 'Powerbuilding' ? 'mixed' : (programType === 'Hypertrophy' ? 'hypertrophy' : (programType === 'Strength' ? 'strength' : 'mixed')));
           const reps = ex?.reps || [8, 12];
           const minRep = reps[0] ?? 8;
 
@@ -732,7 +748,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           let count = 0;
           if (!isCompound) {
             // Isolation: one light set is enough for most people; skip on minimalist-strength intent.
-            if (!(baseProgramType(programType) === 'Minimalist' && intent === 'strength')) count = 1;
+            if (!(programType === 'Minimalist' && intent === 'strength')) count = 1;
           } else {
             if (isMainish) {
               // Heavy / low rep work needs more ramp.
@@ -740,15 +756,15 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
               else if (minRep <= 6) count = 3;
               else count = 2;
               // In Peak strength intent, keep but don't overdo.
-              if (baseProgramType(programType) === 'Strength' && phaseName === 'Peak') count = Math.max(count, 3);
+              if (programType === 'Strength' && phaseName === 'Peak') count = Math.max(count, 3);
               // Minimalist: keep warm-ups brief
-              if (baseProgramType(programType) === 'Minimalist') count = Math.min(count, 2);
+              if (programType === 'Minimalist') count = Math.min(count, 2);
             } else {
               // Accessory compound
               if (minRep <= 6) count = 2;
               else count = 1;
-              if (baseProgramType(programType) === 'Hypertrophy' && intent === 'hypertrophy') count = Math.max(count, 2);
-              if (baseProgramType(programType) === 'Minimalist') count = 1;
+              if (programType === 'Hypertrophy' && intent === 'hypertrophy') count = Math.max(count, 2);
+              if (programType === 'Minimalist') count = 1;
             }
           }
 
@@ -802,27 +818,13 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
         }
 
 function getSets(experience, exType, programType) {
-          // Program variants
-          if (programType === 'German Volume Training (GVT)') {
-            return exType === 'compound' ? 10 : 3;
-          }
-          if (programType === 'Density (EDT-style)') {
-            return exType === 'compound' ? 3 : 2;
-          }
-          if (programType === 'GPP / Conditioning-Integrated') {
-            return exType === 'compound' ? 3 : 2;
-          }
-          if (programType === 'Power / Speed-Strength') {
-            return exType === 'compound' ? (experience === 'Advanced' ? 4 : 3) : 2;
-          }
-
           const volumeMap = {
             Beginner: { compound: 3, isolation: 2 },
             Intermediate: { compound: 4, isolation: 3 },
             Advanced: { compound: 5, isolation: 3 }
           };
-          const multiplier = baseProgramType(programType) === 'Strength' ? 0.75 : 
-                           baseProgramType(programType) === 'Minimalist' ? 0.6 : 1.0;
+          const multiplier = programType === 'Strength' ? 0.75 : 
+                           programType === 'Minimalist' ? 0.6 : 1.0;
           return Math.max(2, Math.round(volumeMap[experience][exType] * multiplier));
         }
 
@@ -1088,14 +1090,6 @@ function getSets(experience, exType, programType) {
               Hypertrophy: { name:'Hypertrophy', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
               Strength:    { name:'Strength',    splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Strength || {}) }, daySlots: STRENGTH_SLOTS, scoring: scoringFor('Strength') },
               Powerbuilding:{ name:'Powerbuilding', splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Powerbuilding || {}) }, daySlots: POWERBUILDING_SLOTS, scoring: scoringFor('Powerbuilding') },
-
-              // Variants (restore full list of program types)
-              'Power / Speed-Strength': { name:'Power / Speed-Strength', splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Strength || {}) }, daySlots: STRENGTH_SLOTS, scoring: scoringFor('Strength') },
-              'Specialization (Body-Part Focus)': { name:'Specialization (Body-Part Focus)', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
-              'German Volume Training (GVT)': { name:'German Volume Training (GVT)', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
-              'Density (EDT-style)': { name:'Density (EDT-style)', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
-              'GPP / Conditioning-Integrated': { name:'GPP / Conditioning-Integrated', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
-
               Minimalist:  { name:'Minimalist',  splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Minimalist || {}) }, daySlots: MINIMALIST_SLOTS, scoring: scoringFor('Minimalist') }
             };
           })();
@@ -1394,7 +1388,7 @@ function generateProgram(config) {
               // Powerbuilding: enforce day intent separation
               let intentBonus = 0;
               const intent = ctx.dayIntent || 'mixed';
-              if (baseProgramType(programType) === 'Powerbuilding') {
+              if (programType === 'Powerbuilding') {
                 if (intent === 'hypertrophy') {
                   // Prefer machine/cable for accessories and reduce fatigue
                   if (slot.role === 'accessory' && ex.isMachine) intentBonus += 0.10;
@@ -1408,27 +1402,7 @@ function generateProgram(config) {
               // Optional-slot suppression: if primary muscle already filled, score collapses
               const optionalSuppression = (slot.optional && remaining <= 0) ? 0.35 : 0;
 
-              
-              // Specialization: bias selection toward the chosen focus muscle group
-              let specBonus = 0;
-              if (programType === 'Specialization (Body-Part Focus)') {
-                const focus = (config && config.specializationFocus) ? String(config.specializationFocus) : 'chest';
-                const focusMap = {
-                  chest: ['chest','upper_chest'],
-                  back: ['back','lats','upper_back','traps'],
-                  shoulders: ['front_delts','side_delts','rear_delts'],
-                  quads: ['quads'],
-                  glutes_hams: ['glutes','hamstrings'],
-                  arms: ['biceps','triceps','forearms']
-                };
-                const needles = focusMap[focus] || focusMap.chest;
-                const hitsPrimary = needles.includes(e.primary);
-                const hitsSecondary = (Array.isArray(e.secondary) ? e.secondary : []).some(m => needles.includes(m));
-                if (hitsPrimary) specBonus = 0.18;
-                else if (hitsSecondary) specBonus = 0.10;
-              }
-
-const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBonus + equipNudge + sfBonus + intentBonus + specBonus
+              const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBonus + equipNudge + sfBonus + intentBonus
                 - fatiguePenalty - setupPenalty - skillPenalty - varietyPenalty - optionalSuppression;
 
               return { ex, score };
@@ -1455,9 +1429,9 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
             let sets = base[experience]?.[exType] ?? 3;
 
             // Program baselines
-            if (baseProgramType(programType) === 'Strength') sets = Math.max(2, Math.round(sets * 0.75));
-            if (baseProgramType(programType) === 'Powerbuilding') sets = Math.max(2, Math.round(sets * 0.90));
-            if (baseProgramType(programType) === 'Minimalist') sets = Math.max(2, Math.round(sets * 0.65));
+            if (programType === 'Strength') sets = Math.max(2, Math.round(sets * 0.75));
+            if (programType === 'Powerbuilding') sets = Math.max(2, Math.round(sets * 0.90));
+            if (programType === 'Minimalist') sets = Math.max(2, Math.round(sets * 0.65));
 
             // Day intent suppression (prevents "filling space" on strength days)
             const intent = dayIntent || 'mixed';
@@ -1489,13 +1463,13 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
 
             // Day intent (used to separate strength vs hypertrophy behavior)
             const getDayIntent = () => {
-              if (baseProgramType(programType) === 'Powerbuilding') {
+              if (programType === 'Powerbuilding') {
                 if (String(dayType).includes('A')) return 'strength';
                 if (String(dayType).includes('B')) return 'hypertrophy';
               }
-              if (baseProgramType(programType) === 'Strength') return 'strength';
-              if (baseProgramType(programType) === 'Hypertrophy') return 'hypertrophy';
-              if (baseProgramType(programType) === 'Minimalist') return 'minimal';
+              if (programType === 'Strength') return 'strength';
+              if (programType === 'Hypertrophy') return 'hypertrophy';
+              if (programType === 'Minimalist') return 'minimal';
               return 'mixed';
             };
 
@@ -1508,9 +1482,9 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
               maxAxialMonstersPerDay: 1,
               // Powerbuilding advanced hinge governor:
               // - allow heavy barbell hinge only on LowerA (strength lower)
-              allowHeavyBarbellHinge: !(baseProgramType(programType) === 'Powerbuilding' && experience === 'Advanced' && String(dayType) !== 'LowerA'),
+              allowHeavyBarbellHinge: !(programType === 'Powerbuilding' && experience === 'Advanced' && String(dayType) !== 'LowerA'),
               // - allow any barbell hinge at all on hypertrophy lower? usually no (prefer DB/machine)
-              allowBarbellHinge: !(baseProgramType(programType) === 'Powerbuilding' && experience === 'Advanced' && String(dayType) === 'LowerB')
+              allowBarbellHinge: !(programType === 'Powerbuilding' && experience === 'Advanced' && String(dayType) === 'LowerB')
             };
 
             const dayFatigue = { highCount: 0 };
@@ -1740,8 +1714,8 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
             const workouts = [];
             for (let d = 0; d < daysNum; d++) {
               const dayType = split[d];
-              const dayIntent = (baseProgramType(programType) === 'Powerbuilding') ? (String(dayType).includes('A') ? 'strength' : (String(dayType).includes('B') ? 'hypertrophy' : 'mixed'))
-                                : (baseProgramType(programType) === 'Strength' ? 'strength' : (baseProgramType(programType) === 'Hypertrophy' ? 'hypertrophy' : (baseProgramType(programType) === 'Minimalist' ? 'minimal' : 'mixed')));
+              const dayIntent = (programType === 'Powerbuilding') ? (String(dayType).includes('A') ? 'strength' : (String(dayType).includes('B') ? 'hypertrophy' : 'mixed'))
+                                : (programType === 'Strength' ? 'strength' : (programType === 'Hypertrophy' ? 'hypertrophy' : (programType === 'Minimalist' ? 'minimal' : 'mixed')));
               // Copy block menu and re-apply week ramp to set counts
               const baseList = blockPlans[blockIndex][d] || [];
               const exercises = baseList.map((ex, idx) => {
@@ -1763,7 +1737,10 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
               });
 
               // Apply supersets if enabled (only non-main lifts)
-              const finalExercises = config.supersets ? applySupersets(exercises, programType) : exercises;
+              let finalExercises = config.supersets ? applySupersets(exercises, programType) : exercises;
+
+              // Apply advanced techniques if enabled (safe accessory work only)
+              finalExercises = applyAdvancedTechniques(finalExercises, config, phase.phase, dayIntent);
 
               // Suggest loads for main/secondary compound lifts with 1RM if provided
               finalExercises.forEach((ex) => {
@@ -1821,7 +1798,7 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
         function ensureProfileId() {
           let pid = getProfileIdFromHash();
           if (!pid) {
-            pid = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+            pid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
             setHashToProfile(pid);
           }
           return pid;
@@ -1885,8 +1862,8 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
             days: '',
             time: '',
             programType: '',
-            specializationFocus: 'chest',
             supersets: false,
+            advancedTechniques: false,
             oneRMs: { chest: '', lats: '', shoulders: '', quads: '', hamstrings: '' },
             // Warm-up preferences
             warmups: {
@@ -2052,16 +2029,12 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
                       onChange={(e) => setConfig({...config, programType: e.target.value})}
                       className="w-full p-4 pr-12 rounded-xl glass bg-black/40 text-white font-semibold border border-white/10 outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
                     >
-                                            <option value="" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Select Program Type</option>
+                      <option value="" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Select Program Type</option>
                       <option value="Hypertrophy" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Hypertrophy</option>
                       <option value="Strength" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Strength</option>
                       <option value="Powerbuilding" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Powerbuilding</option>
-                      <option value="Power / Speed-Strength" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Power / Speed-Strength</option>
-                      <option value="Specialization (Body-Part Focus)" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Specialization (Body-Part Focus)</option>
-                      <option value="German Volume Training (GVT)" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>German Volume Training (GVT)</option>
-                      <option value="Density (EDT-style)" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Density (EDT-style)</option>
-                      <option value="GPP / Conditioning-Integrated" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>GPP / Conditioning-Integrated</option>
-                      <option value="Minimalist" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Minimalist</option></select>
+                      <option value="Minimalist" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Minimalist</option>
+                    </select>
                     <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="m6 9 6 6 6-6" />
@@ -2070,33 +2043,7 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
                   </div>
                 </div>
                 
-                
-                {config.programType === 'Specialization (Body-Part Focus)' && (
-                  <div className="mt-3">
-                    <label className="block text-xs font-bold text-gray-400 mb-2 tracking-wide">SPECIALIZATION FOCUS</label>
-                    <div className="relative">
-                      <select
-                        value={config.specializationFocus || 'chest'}
-                        onChange={(e) => setConfig({...config, specializationFocus: e.target.value})}
-                        className="w-full p-4 pr-12 rounded-xl glass bg-black/40 text-white font-semibold border border-white/10 outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
-                      >
-                        <option value="chest" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Chest</option>
-                        <option value="back" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Back</option>
-                        <option value="shoulders" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Shoulders</option>
-                        <option value="quads" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Quads</option>
-                        <option value="glutes_hams" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Glutes / Hamstrings</option>
-                        <option value="arms" style={{ backgroundColor: '#0b0b0b', color: '#ffffff' }}>Arms</option>
-                      </select>
-                      <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-<div className="flex items-center justify-between p-4 rounded-xl glass">
+                <div className="flex items-center justify-between p-4 rounded-xl glass">
                   <span className="font-semibold text-sm">SUPERSETS</span>
                   <button onClick={() => setConfig({...config, supersets: !config.supersets})}
                     className={"w-14 h-8 rounded-full transition " + (config.supersets ? "bg-orange-500" : "bg-gray-700")}>
@@ -2111,6 +2058,19 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
                 </button>
               </div>
             </div>
+                <div className="flex items-center justify-between p-4 rounded-xl glass mt-3">
+                  <div>
+                    <div className="font-semibold text-sm">ADVANCED TECHNIQUES</div>
+                    <div className="text-xs text-gray-400 mt-0.5">Enable drop sets, rest-pause, myo-reps and more (applied to safe accessory work).</div>
+                  </div>
+                  <button onClick={() => setConfig({...config, advancedTechniques: !config.advancedTechniques})}
+                    className={"w-14 h-8 rounded-full transition " + (config.advancedTechniques ? "bg-orange-500" : "bg-gray-700")}
+                    aria-label="Toggle advanced training techniques">
+                    <div className={"w-6 h-6 rounded-full bg-white transition-transform " + (config.advancedTechniques ? "translate-x-7" : "translate-x-1")}
+                      style={{ marginTop: '4px' }} />
+                  </button>
+                </div>
+
           );
         }
 
@@ -2190,6 +2150,10 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
           // or else the "Change" button will only work for the first rendered card due to stale state.
           const [exercises, setExercises] = useState(() => (workout.exercises || []).map(ex => ({ ...ex })));
 	          const [swapState, setSwapState] = useState({ open: false, index: null, options: [], title: '', anchor: null });
+
+          const [techModal, setTechModal] = useState({ open: false, technique: null });
+          const openTechnique = (technique) => setTechModal({ open: true, technique });
+          const closeTechnique = () => setTechModal({ open: false, technique: null });
 
           useEffect(() => {
             setExercises((workout.exercises || []).map(ex => ({ ...ex })));
@@ -2420,7 +2384,19 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
             <span className="opacity-75 font-extrabold tracking-wider mr-1">EFFORT</span>
             {ex.rir} RIR
           </span>
-        </div>
+        
+          {ex.technique && (
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); openTechnique(ex.technique); }}
+              className="px-2 py-1 bg-emerald-500/15 text-emerald-300 rounded font-bold border border-emerald-500/20 hover:bg-emerald-500/20"
+              title="View technique instructions"
+            >
+              <span className="opacity-75 font-extrabold tracking-wider mr-1">TECH</span>
+              {ex.technique.name}
+            </button>
+          )}
+</div>
 
         <div className="text-[11px] text-gray-500 mb-3 -mt-1">
           Target effort: finish each set with about <span className="font-bold text-gray-300">{ex.rir}</span> reps in reserve (RIR).
@@ -2622,6 +2598,41 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
 	                </div>
 	                );
 	              })()}
+              {techModal.open && techModal.technique && (
+                <div className="fixed inset-0 z-[70]">
+                  <button className="absolute inset-0 bg-black/70" onClick={closeTechnique} aria-label="Close technique" />
+                  <div className="fixed left-1/2 top-1/2 w-[92%] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl glass border border-white/15 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] tracking-widest text-emerald-300 font-extrabold">TECHNIQUE</div>
+                        <div className="text-xl font-bold mt-0.5">{techModal.technique.name}</div>
+                      </div>
+                      <button onClick={closeTechnique} className="w-10 h-10 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white/80">
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="text-sm text-gray-200/90 mt-3 leading-relaxed">
+                      {techModal.technique.description}
+                    </div>
+
+                    <div className="mt-3 p-3 rounded-xl bg-black/40 border border-white/10">
+                      <div className="text-[11px] text-gray-400 font-bold tracking-widest">HOW TO APPLY</div>
+                      <div className="text-sm text-gray-200 mt-1">{techModal.technique.howToApply}</div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-gray-300">
+                        {String(techModal.technique.level || 'Advanced').toUpperCase()}
+                      </span>
+                      <button onClick={closeTechnique} className="px-4 py-2 rounded-xl bg-white/10 border border-white/15 hover:bg-white/15 text-sm font-bold">
+                        Got it
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
           );
         }
@@ -2667,8 +2678,6 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
         
         function SettingsScreen({ config, setConfig }) {
           const [showProfileLinkInfo, setShowProfileLinkInfo] = React.useState(false);
-          // Mobile UX: keep the Profile page shorter by collapsing 1RMs by default.
-          const [showOneRMs, setShowOneRMs] = React.useState(false);
 
           return (
             <div className="content-with-tabs px-4 py-6">
@@ -2677,46 +2686,24 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
               
               <div className="space-y-5">
                 <div className="p-5 rounded-2xl glass">
-                  <button
-                    type="button"
-                    onClick={() => setShowOneRMs(v => !v)}
-                    className="w-full flex items-center justify-between gap-3"
-                    aria-expanded={showOneRMs}
-                  >
-                    <div className="text-left">
-                      <div className="font-bold text-sm text-gray-400">ONE-REP MAXES</div>
-                      <div className="text-xs text-gray-500 mt-1">Tap to {showOneRMs ? 'hide' : 'edit'} lifting numbers</div>
-                    </div>
-                    <svg className={`w-5 h-5 text-gray-400 transition ${showOneRMs ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                  </button>
-
-                  {showOneRMs && (
-                    <div className="space-y-3 mt-4">
-                      {[
-                        {key: 'chest', label: 'Bench Press'},
-                        {key: 'shoulders', label: 'Shoulder Press'},
-                        {key: 'lats', label: 'Pull-up'},
-                        {key: 'quads', label: 'Squat'},
-                        {key: 'hamstrings', label: 'Deadlift'}
-                      ].map(({key, label}) => (
-                        <div key={key} className="flex justify-between items-center">
-                          <span className="text-sm">{label}:</span>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            value={config.oneRMs[key]}
-                            placeholder="0"
-                            onChange={(e) => setConfig({...config, oneRMs: {...config.oneRMs, [key]: e.target.value}})}
-                            className="w-24 p-2 rounded bg-black/50 border border-white/10 text-white text-center outline-none focus:border-orange-500"
-                          />
-                        </div>
-                      ))}
-                      <div className="text-[11px] text-gray-500 pt-1">Tip: you can leave these at 0—loads will be shown as rep/RIR targets instead.</div>
-                    </div>
-                  )}
+                  <h3 className="font-bold mb-4 text-sm text-gray-400">ONE-REP MAXES</h3>
+                  <div className="space-y-3">
+                    {[
+                      {key: 'chest', label: 'Bench Press'},
+                      {key: 'shoulders', label: 'Shoulder Press'},
+                      {key: 'lats', label: 'Pull-up'},
+                      {key: 'quads', label: 'Squat'},
+                      {key: 'hamstrings', label: 'Deadlift'}
+                    ].map(({key, label}) => (
+                      <div key={key} className="flex justify-between items-center">
+                        <span className="text-sm">{label}:</span>
+                        <input type="number" value={config.oneRMs[key]} placeholder="0"
+                          onChange={(e) => setConfig({...config, oneRMs: {...config.oneRMs, [key]: e.target.value}})}
+                          className="w-20 p-2 rounded bg-black/50 border border-white/10 text-white text-center outline-none focus:border-orange-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="p-5 rounded-2xl glass">
@@ -2883,15 +2870,10 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
                   </div>
                 )}
 
-                <div className="sticky-clear">
-                  <button
-                    onClick={() => { if (confirm('Clear data for this profile only?')) { storage.clearProfile(); window.location.reload(); } }}
-                    className="w-full p-4 rounded-xl bg-red-500/20 text-red-400 font-bold transition btn-touch"
-                  >
-                    CLEAR ALL DATA
-                  </button>
-                  <div className="h-2" />
-                </div>
+                <button onClick={() => { if (confirm('Clear data for this profile only?')) { storage.clearProfile(); window.location.reload(); } }}
+                  className="w-full p-4 rounded-xl bg-red-500/20 text-red-400 font-bold transition btn-touch">
+                  CLEAR ALL DATA
+                </button>
               </div>
             </div>
           );
@@ -2996,52 +2978,8 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
           );
         }
 
-
-        // ==================== RUNTIME ERROR GUARD (only shows on crash) ====================
-        (function(){
-          const showErr = (msg) => {
-            try {
-              let el = document.getElementById('trainiq-error-overlay');
-              if (!el) {
-                el = document.createElement('div');
-                el.id = 'trainiq-error-overlay';
-                el.style.position = 'fixed';
-                el.style.inset = '0';
-                el.style.background = 'rgba(0,0,0,0.92)';
-                el.style.zIndex = '999999';
-                el.style.padding = '16px';
-                el.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-                el.style.color = '#fff';
-                el.style.overflow = 'auto';
-                el.innerHTML =
-                  '<div style="max-width:720px;margin:0 auto;padding:20px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(255,255,255,0.04)">' +
-                    '<div style="font-weight:800;letter-spacing:0.04em;margin-bottom:10px">TrainIQ hit an error</div>' +
-                    '<div style="font-size:12px;color:rgba(255,255,255,0.75);margin-bottom:10px">This screen only appears if the app crashes. Screenshot this and send it to me.</div>' +
-                    '<pre id="trainiq-error-text" style="white-space:pre-wrap;font-size:12px;line-height:1.35;background:rgba(0,0,0,0.35);padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.08)"></pre>' +
-                    '<button id="trainiq-error-reload" style="margin-top:12px;padding:10px 14px;border-radius:12px;border:0;background:#3b82f6;color:white;font-weight:800">Reload</button>' +
-                  '</div>';
-                document.body.appendChild(el);
-                document.getElementById('trainiq-error-reload').onclick = () => location.reload();
-              }
-              const pre = document.getElementById('trainiq-error-text');
-              if (pre) pre.textContent = msg;
-            } catch (e) {}
-          };
-
-          window.addEventListener('error', (e) => {
-            const msg = (e && e.error && e.error.stack) ? e.error.stack : (e && e.message) ? e.message : String(e);
-            showErr(msg);
-          });
-
-          window.addEventListener('unhandledrejection', (e) => {
-            const reason = e && e.reason;
-            const msg = (reason && reason.stack) ? reason.stack : (reason && reason.message) ? reason.message : String(reason);
-            showErr(msg);
-          });
-        })();
-
         ensureProfileId();
-        try { ReactDOM.render(<TrainIQ />, document.getElementById('root')); } catch (e) { console.error(e); throw e; }
+        ReactDOM.render(<TrainIQ />, document.getElementById('root'));
     </script>
 </body>
 </html>
