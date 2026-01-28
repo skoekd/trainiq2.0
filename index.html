@@ -1,15 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+
+  <script>
+    window.__trainiqShowErr = window.__trainiqShowErr || function(msg){
+      try{
+        let el = document.getElementById('trainiq-error-overlay');
+        if(!el){
+          el=document.createElement('div');
+          el.id='trainiq-error-overlay';
+          el.style.position='fixed';
+          el.style.inset='0';
+          el.style.background='rgba(0,0,0,0.92)';
+          el.style.zIndex='999999';
+          el.style.padding='16px';
+          el.style.fontFamily='ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial';
+          el.style.color='#fff';
+          el.style.overflow='auto';
+          el.innerHTML =
+            '<div style="max-width:720px;margin:0 auto;padding:20px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(255,255,255,0.04)">'+
+              '<div style="font-weight:800;letter-spacing:0.04em;margin-bottom:10px">TrainIQ hit an error</div>'+
+              '<div style="font-size:12px;color:rgba(255,255,255,0.75);margin-bottom:10px">Screenshot this message and send it to me.</div>'+
+              '<pre id="trainiq-error-text" style="white-space:pre-wrap;font-size:12px;line-height:1.35;background:rgba(0,0,0,0.35);padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.08)"></pre>'+
+              '<button id="trainiq-error-reload" style="margin-top:12px;padding:10px 14px;border-radius:12px;border:0;background:#3b82f6;color:white;font-weight:800">Reload</button>'+
+            '</div>';
+          document.body.appendChild(el);
+          document.getElementById('trainiq-error-reload').onclick = () => location.reload();
+        }
+        const pre=document.getElementById('trainiq-error-text');
+        if(pre) pre.textContent = msg;
+      }catch(e){}
+    };
+    window.addEventListener('error', (e) => {
+      const msg = (e && e.error && e.error.stack) ? e.error.stack : (e && e.message) ? e.message : String(e);
+      window.__trainiqShowErr(msg);
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      const r = e && e.reason;
+      const msg = (r && r.stack) ? r.stack : (r && r.message) ? r.message : String(r);
+      window.__trainiqShowErr(msg);
+    });
+  </script>
+<meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>TrainIQ - Evidence-Based Training</title>
     <link rel="manifest" href="manifest.json">
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js';s.crossOrigin="anonymous";document.head.appendChild(s);})()"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js';s.crossOrigin="anonymous";document.head.appendChild(s);})()"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom-client.production.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom-client.production.min.js';s.crossOrigin="anonymous";document.head.appendChild(s);})()"></script>
-    <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js';document.head.appendChild(s);})()"></script>
-    <script src="https://cdn.tailwindcss.com" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tailwindcss@3.4.17/lib/index.min.js';document.head.appendChild(s);})()"></script>
+    <script crossorigin="anonymous" src="https://unpkg.com/react@18/umd/react.production.min.js" onerror="(function(){window.__trainiqShowErr(\'Failed to load: React (primary)\');var s=document.createElement(\'script\');s.src=\'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js\';s.crossOrigin="anonymous";s.onerror=function(){window.__trainiqShowErr(\'Failed to load: React (fallback)\');};document.head.appendChild(s);})()"></script>
+    <script crossorigin="anonymous" src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" onerror="(function(){window.__trainiqShowErr(\'Failed to load: ReactDOM (primary)\');var s=document.createElement(\'script\');s.src=\'https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js\';s.crossOrigin="anonymous";s.onerror=function(){window.__trainiqShowErr(\'Failed to load: ReactDOM (fallback)\');};document.head.appendChild(s);})()"></script>
+    <script crossorigin="anonymous" src="https://unpkg.com/react-dom@18/umd/react-dom-client.production.min.js" onerror="(function(){window.__trainiqShowErr(\'Failed to load: ReactDOMClient (primary)\');var s=document.createElement(\'script\');s.src=\'https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom-client.production.min.js\';s.crossOrigin="anonymous";s.onerror=function(){window.__trainiqShowErr(\'Failed to load: ReactDOMClient (fallback)\');};document.head.appendChild(s);})()"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js" onerror="(function(){window.__trainiqShowErr(\'Failed to load: Babel (primary)\');var s=document.createElement(\'script\');s.src=\'https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js\';s.onerror=function(){window.__trainiqShowErr(\'Failed to load: Babel (fallback)\');};document.head.appendChild(s);})()"></script>
+    <script src="https://cdn.tailwindcss.com" onerror="console.warn(\'Tailwind failed to load\')"></script>
     <link href="https://fonts.googleapis.com/css2?family=Antonio:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { -webkit-tap-highlight-color: transparent; }
@@ -38,59 +78,8 @@
       <div style="opacity:0.85;font-size:13px">If this stays on screen, a script failed to load. An error box should appear with details.</div>
     </div>
   </div>
-    
     <!-- Evidence-based exercise database (used for substitutions) -->
     <script src="exercise-database.js"></script>
-    
-<script>
-(function(){
-  const show = (msg) => {
-    try{
-      let el = document.getElementById('trainiq-error-overlay');
-      if(!el){
-        el=document.createElement('div');
-        el.id='trainiq-error-overlay';
-        el.style.position='fixed';
-        el.style.inset='0';
-        el.style.background='rgba(0,0,0,0.92)';
-        el.style.zIndex='999999';
-        el.style.padding='16px';
-        el.style.fontFamily='ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial';
-        el.style.color='#fff';
-        el.style.overflow='auto';
-        el.innerHTML =
-          '<div style="max-width:720px;margin:0 auto;padding:20px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(255,255,255,0.04)">'+
-            '<div style="font-weight:800;letter-spacing:0.04em;margin-bottom:10px">TrainIQ hit an error</div>'+
-            '<div style="font-size:12px;color:rgba(255,255,255,0.75);margin-bottom:10px">Screenshot this message and send it to me.</div>'+
-            '<pre id="trainiq-error-text" style="white-space:pre-wrap;font-size:12px;line-height:1.35;background:rgba(0,0,0,0.35);padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.08)"></pre>'+
-            '<button id="trainiq-error-reload" style="margin-top:12px;padding:10px 14px;border-radius:12px;border:0;background:#3b82f6;color:white;font-weight:800">Reload</button>'+
-          '</div>';
-        document.body.appendChild(el);
-        document.getElementById('trainiq-error-reload').onclick = () => location.reload();
-      }
-      const pre=document.getElementById('trainiq-error-text');
-      if(pre) pre.textContent = msg;
-    }catch(e){}
-  };
-
-  window.addEventListener('error', (e) => {
-    const msg = (e && e.error && e.error.stack) ? e.error.stack : (e && e.message) ? e.message : String(e);
-    show(msg);
-  });
-
-  window.addEventListener('unhandledrejection', (e) => {
-    const r = e && e.reason;
-    const msg = (r && r.stack) ? r.stack : (r && r.message) ? r.message : String(r);
-    show(msg);
-  });
-
-  setTimeout(() => {
-    if(!window.Babel){ show('Babel failed to load. Try cache-bust: add ?v=123 to the URL and refresh.'); }
-    if(!window.React){ show('React failed to load. Try cache-bust: add ?v=123 to the URL and refresh.'); }
-  }, 3500);
-})();
-</script>
-
     <script id="app-jsx" type="text/plain">
 const { useState, useEffect } = React;
 
@@ -3036,70 +3025,12 @@ function generateProgram(config) {
         }
 
         ensureProfileId();
-        
-        // ==================== RUNTIME ERROR GUARD (shows on crash) ====================
-        (function(){
-          const showErr = (msg) => {
-            try {
-              let el = document.getElementById('trainiq-error-overlay');
-              if (!el) {
-                el = document.createElement('div');
-                el.id = 'trainiq-error-overlay';
-                el.style.position = 'fixed';
-                el.style.inset = '0';
-                el.style.background = 'rgba(0,0,0,0.92)';
-                el.style.zIndex = '999999';
-                el.style.padding = '16px';
-                el.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-                el.style.color = '#fff';
-                el.style.overflow = 'auto';
-                el.innerHTML =
-                  '<div style="max-width:720px;margin:0 auto;padding:20px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(255,255,255,0.04)">' +
-                    '<div style="font-weight:800;letter-spacing:0.04em;margin-bottom:10px">TrainIQ hit an error</div>' +
-                    '<div style="font-size:12px;color:rgba(255,255,255,0.75);margin-bottom:10px">Screenshot this message and send it to me.</div>' +
-                    '<pre id="trainiq-error-text" style="white-space:pre-wrap;font-size:12px;line-height:1.35;background:rgba(0,0,0,0.35);padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.08)"></pre>' +
-                    '<button id="trainiq-error-reload" style="margin-top:12px;padding:10px 14px;border-radius:12px;border:0;background:#3b82f6;color:white;font-weight:800">Reload</button>' +
-                  '</div>';
-                document.body.appendChild(el);
-                document.getElementById('trainiq-error-reload').onclick = () => location.reload();
-              }
-              const pre = document.getElementById('trainiq-error-text');
-              if (pre) pre.textContent = msg;
-            } catch (e) {}
-          };
+        ReactDOM.render(<TrainIQ />, document.getElementById('root'));
+</script>
 
-          window.addEventListener('error', (e) => {
-            const msg = (e && e.error && e.error.stack) ? e.error.stack : (e && e.message) ? e.message : String(e);
-            showErr(msg);
-          });
-
-          window.addEventListener('unhandledrejection', (e) => {
-            const reason = e && e.reason;
-            const msg = (reason && reason.stack) ? reason.stack : (reason && reason.message) ? reason.message : String(reason);
-            showErr(msg);
-          });
-        })();
-
-        // ==================== APP MOUNT (React 18-safe) ====================
-        (function(){
-          const rootEl = document.getElementById('root');
-          try {
-            if (window.ReactDOMClient && ReactDOMClient.createRoot) {
-              ReactDOMClient.createRoot(rootEl).render(<TrainIQ />);
-            } else if (window.ReactDOM && ReactDOM.createRoot) {
-              ReactDOM.createRoot(rootEl).render(<TrainIQ />);
-            } else {
-              ReactDOM.render(<TrainIQ />, rootEl);
-            }
-          } catch (e) {
-            console.error(e);
-            throw e;
-          }
-        })();
-    </script>
-    
 <script>
 (function(){
+  const start = Date.now();
   function mountFromJSX(){
     const jsxEl = document.getElementById('app-jsx');
     if(!jsxEl) throw new Error('app-jsx script tag missing');
@@ -3110,16 +3041,16 @@ function generateProgram(config) {
     s.text = out;
     document.body.appendChild(s);
   }
-  const start = Date.now();
   (function poll(){
     if(window.React && window.ReactDOM && window.Babel){
-      mountFromJSX();
+      try { mountFromJSX(); } catch(e){ window.__trainiqShowErr(e && e.stack ? e.stack : String(e)); }
       return;
     }
-    if(Date.now() - start > 8000){
-      throw new Error('Timed out waiting for React/Babel to load.');
+    if(Date.now() - start > 9000){
+      window.__trainiqShowErr('Timed out waiting for React/Babel to load.');
+      return;
     }
-    setTimeout(poll, 50);
+    setTimeout(poll, 60);
   })();
 })();
 </script>
