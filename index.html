@@ -7,6 +7,7 @@
     <link rel="manifest" href="manifest.json">
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/tailwindcss@2.2.19/dist/tailwind.min.css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Antonio:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -27,6 +28,11 @@
         .ring-premium { box-shadow: 0 0 0 1px rgba(255,255,255,0.10), 0 18px 40px rgba(0,0,0,0.45); }
         .btn-touch { min-height: 48px; transition: all 0.2s; }
         .btn-touch:active { transform: scale(0.98); }
+    </style>
+    <style>
+      /* fallback base */
+      button, select, input { font-size: 16px; }
+      .tab-bar { padding-bottom: env(safe-area-inset-bottom); }
     </style>
 </head>
 <body>
