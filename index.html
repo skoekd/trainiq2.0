@@ -2018,29 +2018,98 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
           };
 
           const handleExportCSV = () => {
+            // Keep legacy block import/export intact, but allow a workout-style export too (no UI changes: uses confirm()).
+            const wantWorkoutCSV = confirm('Export as workout-style CSV (Date, Exercise, Weight, Sets, Reps, RIR)?\n\nPress OK for workout-style. Press Cancel for legacy blocks CSV (importable).');
+
             const blocks = [];
             if (program) blocks.push({ slot: 'current', ...program });
             (history || []).forEach((p) => blocks.push({ slot: 'history', ...p }));
-            const header = ['slot','createdAt','generator','config','weeks'];
-            const lines = [header.join(',')];
-            blocks.forEach((p) => {
-              lines.push([
-                escapeCSV(p.slot || 'history'),
-                escapeCSV(p.createdAt || ''),
-                escapeCSV(p.generator || ''),
-                escapeCSV(JSON.stringify(p.config || {})),
-                escapeCSV(JSON.stringify(p.weeks || []))
-              ].join(','));
-            });
-            const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'trainiq_blocks.csv';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+
+            const legacyExport = () => {
+              const header = ['slot','createdAt','generator','config','weeks'];
+              const lines = [header.join(',')];
+              blocks.forEach((p) => {
+                lines.push([
+                  escapeCSV(p.slot || ''),
+                  escapeCSV(p.createdAt || ''),
+                  escapeCSV(p.generator || ''),
+                  escapeCSV(JSON.stringify(p.config || {})),
+                  escapeCSV(JSON.stringify(p.weeks || []))
+                ].join(','));
+              });
+              const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'trainiq_blocks.csv';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            };
+
+            const addDays = (isoDateStr, days) => {
+              try {
+                const d = new Date(isoDateStr);
+                if (isNaN(d.getTime())) return isoDateStr;
+                d.setDate(d.getDate() + days);
+                // YYYY-MM-DD
+                return d.toISOString().slice(0, 10);
+              } catch (e) {
+                return isoDateStr;
+              }
+            };
+
+            const workoutStyleExport = () => {
+              const header = ['Date','Exercise','Weight','Sets','Reps','Rir'];
+              const lines = [header.join(',')];
+
+              blocks.forEach((p) => {
+                const createdAt = p.createdAt ? new Date(p.createdAt).toISOString().slice(0,10) : '';
+                const weeks = Array.isArray(p.weeks) ? p.weeks : [];
+                let workoutCounter = 0;
+
+                weeks.forEach((w) => {
+                  const workouts = Array.isArray(w?.workouts) ? w.workouts : [];
+                  workouts.forEach((wo) => {
+                    const dateStr = createdAt ? addDays(createdAt, workoutCounter) : '';
+                    workoutCounter += 1;
+
+                    const exs = Array.isArray(wo?.exercises) ? wo.exercises : [];
+                    exs.forEach((ex) => {
+                      const name = ex?.name || '';
+                      const weight = (ex?.weight ?? '') === null ? '' : (ex?.weight ?? '');
+                      const sets = ex?.sets ?? '';
+                      const repsArr = ex?.reps;
+                      const reps = Array.isArray(repsArr) ? `${repsArr[0]}-${repsArr[1]}` : (repsArr ?? '');
+                      const rir = ex?.rir ?? '';
+
+                      lines.push([
+                        escapeCSV(dateStr),
+                        escapeCSV(name),
+                        escapeCSV(String(weight)),
+                        escapeCSV(String(sets)),
+                        escapeCSV(String(reps)),
+                        escapeCSV(String(rir))
+                      ].join(','));
+                    });
+                  });
+                });
+              });
+
+              const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'trainiq_workouts.csv';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            };
+
+            if (wantWorkoutCSV) workoutStyleExport();
+            else legacyExport();
           };
 
           const handleImportCSV = (csvText) => {
