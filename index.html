@@ -386,38 +386,68 @@
         // - avoid high-fatigue/high-skill compounds
         // - 0 techniques for Beginners, 1 for Intermediate, 1–2 for Advanced
         // - none on deload weeks
-        function applyAdvancedTechniques(exercises, { enabled, experience, phaseName, isDeload } = {}) {
+        function applyAdvancedTechniques(exercises, { enabled, experience, phaseName, isDeload, programType } = {}) {
           if (!enabled) return exercises;
           if (!Array.isArray(exercises) || !exercises.length) return exercises;
           if (isDeload) return exercises;
           if (experience === 'Beginner') return exercises;
 
-          const maxPerSession = (experience === 'Advanced') ? 2 : 1;
+          // Frequency caps (per guide): Intermediate 1/session, Advanced 1–2/session.
+          // Keep GVT extra conservative due to already-high volume.
+          const baseMax = (experience === 'Advanced') ? 2 : 1;
+          const maxPerSession = (programType === 'German Volume Training (GVT)') ? 1 : baseMax;
 
-          // Phase mapping (kept simple + safe)
-          // Base/Accumulation: metabolic techniques
-          // Intensification: rest-pause
-          // Peak: tempo/eccentric emphasis (low-risk)
-          const pickTechnique = (idx) => {
-            if (phaseName === 'Intensification') return 'Rest-Pause';
-            if (phaseName === 'Peak') return 'Tempo / Eccentric';
-            return (idx % 2 === 0) ? 'Myo-Reps' : 'Drop Set';
-          };
+          // Technique pools by phase + program type (safe + practical)
+          // Guide alignment:
+          // - Accumulation/Base: metabolic (drop sets, myo-reps)
+          // - Intensification: rest-pause, clusters (more tension / quality)
+          // - Peak: keep low-risk (clusters for speed/strength, tempo for accessories)
+          const pools = (() => {
+            const pt = programType || '';
+            const isStrengthy = (pt === 'Strength' || pt === 'Powerbuilding');
+            const isPower = (pt === 'Power / Speed-Strength');
+            const isGVT = (pt === 'German Volume Training (GVT)');
+            const isEDT = (pt === 'Density Training (EDT)');
+            const isGPP = (pt === 'GPP / Conditioning-Integrated');
+
+            // Default pools (hypertrophy-friendly)
+            if (phaseName === 'Intensification') {
+              // Slightly more tension-biased
+              return isPower ? ['Cluster Set'] : ['Rest-Pause', 'Cluster Set'];
+            }
+            if (phaseName === 'Peak') {
+              // Keep accessories safe; allow clusters for power/strength quality
+              if (isPower) return ['Cluster Set'];
+              if (isStrengthy) return ['Cluster Set', 'Tempo / Eccentric'];
+              return ['Tempo / Eccentric'];
+            }
+            // Base/Accumulation
+            if (isGVT) return ['Tempo / Eccentric']; // GVT already provides huge stimulus; avoid extra metabolic burn.
+            if (isGPP) return ['Myo-Reps', 'Drop Set']; // efficient stimulus with lighter loads
+            if (isEDT) return ['Myo-Reps', 'Rest-Pause']; // density-friendly
+            if (isStrengthy) return ['Tempo / Eccentric', 'Rest-Pause']; // keep it controlled on accessories
+            return ['Myo-Reps', 'Drop Set'];
+          })();
 
           const instructions = {
             'Drop Set': 'Final set only: go near-failure, reduce load ~20–30%, continue 1–2 drops.',
             'Rest-Pause': '1 top set near-failure, rest 10–20s, then 2–4 mini-sets of 2–5 reps.',
             'Myo-Reps': '1 activation set (12–20) near-failure, rest ~15s, then 3–5 mini-sets of 3–5 reps.',
+            'Cluster Set': 'Use your normal load, break sets into small clusters: 4–6 clusters of 2 reps with 20–30s rest.',
             'Tempo / Eccentric': 'Slow eccentric (3–5s) on working sets; keep control, don’t chase failure.'
           };
 
-          // Candidates: accessories first, isolations preferred
+          const pickTechnique = (idx) => pools[idx % pools.length] || pools[0] || 'Tempo / Eccentric';
+
+          // Candidate selection (safe):
+          // - Prefer isolation accessories
+          // - Allow accessory compounds only if low fatigue/setup (when tags exist)
+          // - Avoid tagging main lifts
           const candidates = exercises
             .map((ex, i) => ({ ex, i }))
             .filter(({ ex }) => ex && ex.role === 'accessory')
             .filter(({ ex }) => {
               if (ex.type === 'isolation') return true;
-              // For accessory compounds: only if fatigue/setup are low-ish (when tags exist)
               const f = ex?.tags?.fatigue;
               const s = ex?.tags?.setup;
               return (f == null || f <= 2) && (s == null || s <= 2);
@@ -1989,7 +2019,7 @@ return sets;
               let finalExercises = config.supersets ? applySupersets(exercises, programType) : exercises;
 
               // Optionally tag a small number of accessory movements with advanced training techniques (metadata only)
-              finalExercises = applyAdvancedTechniques(finalExercises, { enabled: !!config.advancedTechniques, experience, phaseName: phase.phase, isDeload: (ramp.deload || phase.isDeload) });
+              finalExercises = applyAdvancedTechniques(finalExercises, { enabled: !!config.advancedTechniques, experience, phaseName: phase.phase, isDeload: (ramp.deload || phase.isDeload), programType });
 
               // Suggest loads for main/secondary compound lifts with 1RM if provided
               finalExercises.forEach((ex) => {
