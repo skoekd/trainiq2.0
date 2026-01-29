@@ -299,21 +299,10 @@
             if (!ex) continue;
 
             if (baseProgramType(programType) === 'Strength') {
-            // Variant: Power / Speed-Strength (keep loads high, reps lower, preserve bar speed)
-            if (programType === 'Power / Speed-Strength') {
-              const isMainish = (role === 'main' || role === 'secondary');
-              if (exType === 'compound' && isMainish) {
-                if (phaseName === 'Peak') return bump([1, 3]);
-                if (phaseName === 'Intensification') return bump([2, 4]);
-                return bump([3, 5]); // Base
-              }
-              if (exType === 'compound') return bump([5, 8]);
-              return bump([8, 12]);
-            }
-
               if (ex.type === 'isolation') eligibleIdx.push(i);
               continue;
             }
+
 
             // For non-strength: prefer higher-rep / lower-skill accessories
             // (keeps heavy compounds from being paired).
@@ -596,6 +585,7 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           // Deloads reduce intensity further.
           if (phase?.intensityAdj != null) pct += (phase.intensityAdj / 100);
           if (phase?.isDeload) pct -= 0.08;
+          if (phase?.intensityNudge != null) pct += phase.intensityNudge;
 
           // Role adjustment
           if (role === 'secondary') pct -= 0.03;
@@ -644,6 +634,33 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
         function getRepRange(programType, exType, position, role = 'accessory', phaseName = 'Base', dayIntent = null) {
           const bump = (r) => (position === 0 ? r : [r[0] + 2, r[1] + 3]);
 
+          // ---------------- Variant program types ----------------
+          if (programType === 'Power / Speed-Strength') {
+            const isMainish = (role === 'main' || role === 'secondary');
+            if (exType === 'compound' && isMainish) {
+              if (phaseName === 'Peak') return bump(role === 'main' ? [1, 3] : [2, 4]);
+              if (phaseName === 'Intensification') return bump([2, 4]);
+              return bump([3, 5]); // Base
+            }
+            return bump(exType === 'compound' ? [5, 8] : [8, 12]);
+          }
+
+          if (programType === 'German Volume Training (GVT)') {
+            if (exType === 'compound' && role === 'main') return bump([10, 10]);
+            if (exType === 'compound') return bump([8, 10]);
+            return bump([10, 15]);
+          }
+
+          if (programType === 'Density (EDT-style)') {
+            // Density blocks: moderate reps that allow repeated high-quality sets.
+            return bump(exType === 'compound' ? [6, 10] : [10, 15]);
+          }
+
+          if (programType === 'GPP / Conditioning-Integrated') {
+            // Conditioning-integrated: slightly higher reps, shorter rest elsewhere.
+            return bump(exType === 'compound' ? [8, 12] : [12, 20]);
+          }
+
           // ---------------- Strength ----------------
           if (baseProgramType(programType) === 'Strength') {
             const isMainish = (role === 'main' || role === 'secondary');
@@ -690,8 +707,8 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           return bump(r);
         }
 
-
         
+
         function getRIR(experience, exType, setNum, totalSets, programType = 'Hypertrophy', role = 'accessory', phaseName = 'Base', dayIntent = null) {
           // Variant overrides (keep the rest of the logic intact)
           if (programType === 'Power / Speed-Strength') {
@@ -706,7 +723,12 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           if (programType === 'Density (EDT-style)') {
             // Submaximal, driven by density not failure
             return 2;
+                    if (programType === 'GPP / Conditioning-Integrated') {
+            // Conditioning-integrated: stay submaximal
+            return 3;
           }
+
+}
 
           // Base effort by training age
           const base = {
@@ -753,7 +775,12 @@ function calcMainLiftWeight(oneRM, repsRange, rir, experience, programType, role
           if (programType === 'Power / Speed-Strength') {
             if (exType === 'compound') return '3-6min';
             return '2-3min';
+                    if (programType === 'GPP / Conditioning-Integrated') {
+            if (exType === 'compound') return '60-120s';
+            return '30-75s';
           }
+
+}
 
 
           if (minRep <= 6 && exType === 'compound') {
@@ -961,7 +988,32 @@ function getSets(experience, exType, programType) {
               ]
             };
 
-            const STRENGTH_SLOTS = {
+            
+          // GVT: fewer movements per day, very high set volume on the primary compound.
+          // Keeps the UI/data model identical; only affects which slots are used.
+          const GVT_SLOTS = {
+            Upper: [
+              { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound' },
+              { pool:'back_horizontal',  fallback:'horizontal_pull', role:'main', type:'compound' },
+              { pool:'shoulders_lateral',fallback:'shoulders_lateral',role:'accessory', type:'isolation', optional:true, prefer:'side_delts' },
+              { pool:'arms_biceps',      fallback:'arms_biceps',     role:'accessory', type:'isolation', optional:true, prefer:'biceps' },
+              { pool:'arms_triceps',     fallback:'arms_triceps',    role:'accessory', type:'isolation', optional:true, prefer:'triceps' }
+            ],
+            Lower: [
+              { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound' },
+              { pool:'legs_hinge',       fallback:'hinge_pattern',   role:'main', type:'compound' },
+              { pool:'legs_calf',        fallback:'legs_calf',       role:'accessory', type:'isolation', optional:true, prefer:'calves' },
+              { pool:'core',             fallback:'core',            role:'accessory', type:'isolation', optional:true, prefer:'abs' }
+            ],
+            Full: [
+              { pool:'legs_squat',       fallback:'squat_pattern',   role:'main', type:'compound' },
+              { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound' },
+              { pool:'back_horizontal',  fallback:'horizontal_pull', role:'secondary', type:'compound' },
+              { pool:'shoulders_lateral',fallback:'shoulders_lateral',role:'accessory', type:'isolation', optional:true, prefer:'side_delts' }
+            ]
+          };
+
+const STRENGTH_SLOTS = {
               Upper: [
                 { pool:'chest_horizontal', fallback:'horizontal_push', role:'main', type:'compound', requireMainLiftKey:'bench' },
                 { pool:'back_horizontal',  fallback:'horizontal_pull', role:'main', type:'compound' },
@@ -1150,7 +1202,7 @@ function getSets(experience, exType, programType) {
               // Variants (restore full list of program types)
               'Power / Speed-Strength': { name:'Power / Speed-Strength', splitTemplates: { ...DEFAULT_SPLITS, ...(SPLIT_OVERRIDES.Strength || {}) }, daySlots: STRENGTH_SLOTS, scoring: scoringFor('Strength') },
               'Specialization (Body-Part Focus)': { name:'Specialization (Body-Part Focus)', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
-              'German Volume Training (GVT)': { name:'German Volume Training (GVT)', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
+              'German Volume Training (GVT)': { name:'German Volume Training (GVT)', splitTemplates: DEFAULT_SPLITS, daySlots: GVT_SLOTS, scoring: scoringFor('Hypertrophy') },
               'Density (EDT-style)': { name:'Density (EDT-style)', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
               'GPP / Conditioning-Integrated': { name:'GPP / Conditioning-Integrated', splitTemplates: DEFAULT_SPLITS, daySlots: HYPERTROPHY_SLOTS, scoring: scoringFor('Hypertrophy') },
 
@@ -1289,6 +1341,53 @@ function generateProgram(config) {
             Advanced: { MEV: 8, MAV: 16, MRV: 24 }
           };
 
+// Adjust volume landmarks by experience, program type, and phase.
+// Goal: "Advanced" is not automatically "more volume"—it becomes more specific and fatigue-aware,
+// especially in Intensification/Peak.
+function adjustedLandmarks(experience, programType, phaseName) {
+  const base = LANDMARKS[experience] || LANDMARKS.Intermediate;
+  const out = { ...base };
+
+  const baseType = baseProgramType(programType);
+  const phase = String(phaseName || '');
+
+  // In heavier phases, advanced lifters generally tolerate less "junk volume" at the same intensity.
+  if (experience === 'Advanced' && (phase === 'Intensification' || phase === 'Peak')) {
+    if (baseType === 'Strength' || baseType === 'Powerbuilding') {
+      out.MAV = Math.max(out.MEV + 4, out.MAV - 2);
+      out.MRV = Math.max(out.MAV + 4, out.MRV - 2);
+    } else {
+      out.MAV = Math.max(out.MEV + 4, out.MAV - 1);
+      out.MRV = Math.max(out.MAV + 4, out.MRV - 1);
+    }
+  }
+
+  // Minimalist caps
+  if (baseType === 'Minimalist') {
+    out.MEV = Math.min(out.MEV, 5);
+    out.MAV = Math.min(out.MAV, 9);
+    out.MRV = Math.min(out.MRV, 12);
+  }
+
+  return out;
+}
+
+// Map Specialization focus to tracked muscles, used for target boosts.
+function specializationNeedles(focusKey) {
+  const focus = String(focusKey || 'chest');
+  const focusMap = {
+    chest: ['chest','triceps','front_delts'],
+    back: ['back','lats','biceps'],
+    shoulders: ['front_delts','side_delts','rear_delts'],
+    arms: ['biceps','triceps'],
+    legs: ['quads','hamstrings','glutes','calves'],
+    glutes: ['glutes','hamstrings'],
+    quads: ['quads'],
+    hamstrings: ['hamstrings'],
+    calves: ['calves']
+  };
+  return focusMap[focus] || focusMap.chest;
+}
           // Per-week ramp inside a 4-week block (1–3 accumulate, 4 deload)
           function weekRampInBlock(weekInBlock) {
             if (weekInBlock === 4) return { volMult: 0.5, deload: true };
@@ -1297,8 +1396,32 @@ function generateProgram(config) {
             return { volMult: 1.0, deload: false };
           }
 
-          function baselineWeeklyTargets() {
-            const lm = LANDMARKS[experience] || LANDMARKS.Intermediate;
+          
+          // Combine phase-level and within-block progression into a single week context.
+          // Preserves the existing data model; only affects prescription logic.
+          function weekContext(week) {
+            const phase = getPhaseParams(week);
+            const weekInBlock = ((week - 1) % 4) + 1;
+            const ramp = weekRampInBlock(weekInBlock);
+
+            // Phase volume multiplier applies in addition to the 1–3 ramp.
+            // For deload weeks, use phase.volumeMult directly (avoid double-deloading).
+            const volMult = phase?.isDeload ? (phase.volumeMult ?? 0.5) : (ramp.volMult * (phase?.volumeMult ?? 1.0));
+
+            // Small within-block intensity progression (week 2/3), deload drop.
+            const intensityNudge =
+              phase?.isDeload ? -0.05 : (weekInBlock === 3 ? 0.02 : weekInBlock === 2 ? 0.01 : 0);
+
+            return {
+              ...phase,
+              weekInBlock,
+              ramp,
+              volMult,
+              intensityNudge
+            };
+          }
+
+function baselineWeeklyTargets(lm, programType, config) {
             // Hypertrophy-first defaults: emphasize back/quads/delts slightly.
             const base = {};
             MUSCLES.forEach(m => { base[m] = lm.MEV; });
@@ -1307,10 +1430,17 @@ function generateProgram(config) {
             base.side_delts = lm.MEV + 1;
             base.glutes = lm.MEV + 1;
             // Arms often get lots of secondary volume; keep at MEV initially.
-            return { base, lm };
+
+            // Specialization: modestly raise baseline targets for focus muscles (rails still apply).
+            if (programType === 'Specialization (Body-Part Focus)') {
+              const needles = specializationNeedles(config?.specializationFocus);
+              needles.forEach(k => { if (base[k] != null) base[k] = base[k] + 2; });
+            }
+
+            return base;
           }
 
-          function applyRails(targets, lm) {
+function applyRails(targets, lm) {
             const out = { ...targets };
             Object.keys(out).forEach(m => {
               const mr = (m === 'hamstrings') ? (lm.MRV - 2) : lm.MRV;
@@ -1503,7 +1633,7 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
 
 
           
-          function defaultSetsForRole(exRole, exType, wRamp, dayIntent = null) {
+          function defaultSetsForRole(exRole, exType, wRamp, dayIntent = null, phaseName = null, experienceLevel = null) {
             // Baseline sets by experience and role.
             const base = {
               Beginner:   { compound: 3, isolation: 2 },
@@ -1516,6 +1646,22 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
             if (baseProgramType(programType) === 'Strength') sets = Math.max(2, Math.round(sets * 0.75));
             if (baseProgramType(programType) === 'Powerbuilding') sets = Math.max(2, Math.round(sets * 0.90));
             if (baseProgramType(programType) === 'Minimalist') sets = Math.max(2, Math.round(sets * 0.65));
+
+            // Variant templates (keep UI + data model; only adjust prescription)
+            if (programType === 'German Volume Training (GVT)') {
+              if (exRole === 'main' && exType === 'compound') sets = 10;
+              else if (exRole === 'secondary' && exType === 'compound') sets = 4;
+              else sets = Math.max(2, Math.round(sets * 0.9));
+            }
+            if (programType === 'Density (EDT-style)') {
+              // Slightly higher set counts on accessories to drive density.
+              if (exRole === 'accessory') sets = Math.round(sets * 1.15);
+            }
+            if (programType === 'GPP / Conditioning-Integrated') {
+              // Keep sets moderate, bias to shorter rests elsewhere.
+              sets = Math.max(1, Math.round(sets * 0.95));
+            }
+
 
             // Day intent suppression (prevents "filling space" on strength days)
             const intent = dayIntent || 'mixed';
@@ -1534,7 +1680,16 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
             }
 
             if (wRamp.deload) sets = Math.max(1, Math.round(sets * 0.7));
-            return sets;
+            // Advanced fatigue control in heavier phases:
+// keep specificity high while trimming "junk" accessory volume.
+if (experienceLevel === 'Advanced' && (phaseName === 'Intensification' || phaseName === 'Peak')) {
+  if (exRole === 'accessory') sets = Math.max(1, Math.round(sets * 0.85));
+  if (dayIntent === 'hypertrophy' && exRole === 'secondary' && exType === 'compound') {
+    sets = Math.max(2, Math.round(sets * 0.9));
+  }
+}
+
+return sets;
           }
 
           
@@ -1563,7 +1718,7 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
             const ctx = {
               dayIntent,
               axialUsedCount: 0,
-              maxAxialMonstersPerDay: 1,
+              maxAxialMonstersPerDay: (experience === 'Advanced' && (phaseName === 'Peak' || phaseName === 'Intensification') && dayIntent !== 'strength') ? 0 : 1,
               // Powerbuilding advanced hinge governor:
               // - allow heavy barbell hinge only on LowerA (strength lower)
               allowHeavyBarbellHinge: !(baseProgramType(programType) === 'Powerbuilding' && experience === 'Advanced' && String(dayType) !== 'LowerA'),
@@ -1752,46 +1907,56 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
           }
 
           // -------------------- Weekly targets & block stability --------------------
-          const { base: baseTargets, lm } = baselineWeeklyTargets();
-
           function targetsForWeek(week) {
-            const weekInBlock = ((week - 1) % 4) + 1;
-            const ramp = weekRampInBlock(weekInBlock);
-            // Start around MEV, drift toward MAV via multiplier.
-            // Accessories carry most of the ramp via sets; we also scale baseline targets modestly.
+            const ctx = weekContext(week);
+            const weekInBlock = ctx.weekInBlock;
+
+            // Dynamic landmarks: phase-aware (advanced gets more fatigue-aware in heavier phases)
+            const lmWeek = adjustedLandmarks(experience, programType, ctx.phase);
+
+            // Baseline weekly targets start at MEV (with modest muscle biases) and can be boosted for specialization.
+            const baseTargets = baselineWeeklyTargets(lmWeek, programType, config);
+
+            // Drift toward MAV via within-block ramp, then taper volume by phase.
             const t = {};
             Object.keys(baseTargets).forEach(m => {
-              const target = baseTargets[m] * (ramp.deload ? 0.6 : (weekInBlock === 3 ? 1.20 : weekInBlock === 2 ? 1.10 : 1.0));
-              t[m] = Math.round(target);
+              const base = baseTargets[m];
+              const mult = (ctx?.isDeload)
+                ? 0.6
+                : ((ctx?.volumeMult ?? 1.0) * (weekInBlock === 3 ? 1.20 : weekInBlock === 2 ? 1.10 : 1.0));
+              t[m] = Math.round(base * mult);
             });
-            return applyRails(t, lm);
+
+            return applyRails(t, lmWeek);
           }
 
-          // Pre-select exercises for each block (weeks 1–3 stable).
+// Pre-select exercises for each block (weeks 1–3 stable).
           const blockPlans = {}; // blockIndex -> dayIndex -> exercise list (without per-week sets)
           function getBlockIndex(week) { return Math.floor((week - 1) / 4); }
 
           // -------------------- Build program --------------------
           const weeks = [];
           for (let w = 1; w <= 12; w++) {
-            const phase = getPhaseParams(w);
+            const phase = weekContext(w);
             const blockIndex = getBlockIndex(w);
-            const weekInBlock = ((w - 1) % 4) + 1;
-            const ramp = weekRampInBlock(weekInBlock);
+            const weekInBlock = phase.weekInBlock;
+            const ramp = { volMult: phase.volMult, deload: !!phase.isDeload };
 
             const weekTargets = targetsForWeek(w);
 
             if (!blockPlans[blockIndex]) {
               blockPlans[blockIndex] = {};
               // Choose stable exercise menus for this block using Week 1 targets.
-              const wk1Targets = targetsForWeek(blockIndex * 4 + 1);
+              const blockStartWeek = blockIndex * 4 + 1;
+              const wk1Targets = targetsForWeek(blockStartWeek);
+              const blockStartCtx = weekContext(blockStartWeek);
               const timeCapMin = parseInt(config.time || '') || null;
               // Keep a shared week-level used set while building the block menu.
               // This prevents duplicated days (e.g., UpperA and UpperB) from becoming identical.
               const weekUsedIds = new Set();
               for (let d = 0; d < daysNum; d++) {
                 const dayType = split[d];
-                blockPlans[blockIndex][d] = buildDayExerciseList(dayType, wk1Targets, weekRampInBlock(1), timeCapMin, 'Base', weekUsedIds);
+                blockPlans[blockIndex][d] = buildDayExerciseList(dayType, wk1Targets, { volMult: blockStartCtx.volMult, deload: !!blockStartCtx.isDeload }, timeCapMin, blockStartCtx.phase, weekUsedIds);
               }
             }
 
@@ -1806,7 +1971,7 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
                 const exType = ex.type;
                 const role = ex.role;
                 const reps = getRepRange(programType, exType, idx === 0 ? 0 : 1, role, phase.phase, dayIntent);
-                const sets = defaultSetsForRole(role, exType, ramp, dayIntent);
+                const sets = defaultSetsForRole(role, exType, ramp, dayIntent, phase.phase, experience);
                 const rir = getRIR(experience, exType, 1, sets, programType, role, phase.phase, dayIntent);
                 const rest = getRest(reps[0], exType, programType);
                 return {
