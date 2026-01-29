@@ -1984,6 +1984,115 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
           useEffect(() => {
             storage.set('state', { config, program, history });
           }, [config, program, history]);
+
+          // ==================== HISTORY CSV IMPORT/EXPORT ====================
+          const escapeCSV = (v) => {
+            const s = String(v ?? '');
+            if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+            return s;
+          };
+
+          const parseCSV = (text) => {
+            const rows = [];
+            let row = [];
+            let cur = '';
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+              const ch = text[i];
+              const next = text[i + 1];
+              if (inQuotes) {
+                if (ch === '"' && next === '"') { cur += '"'; i++; }
+                else if (ch === '"') { inQuotes = false; }
+                else { cur += ch; }
+              } else {
+                if (ch === '"') inQuotes = true;
+                else if (ch === ',') { row.push(cur); cur = ''; }
+                else if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+                else if (ch === '\r') { /* ignore */ }
+                else { cur += ch; }
+              }
+            }
+            row.push(cur);
+            rows.push(row);
+            return rows;
+          };
+
+          const handleExportCSV = () => {
+            const blocks = [];
+            if (program) blocks.push({ slot: 'current', ...program });
+            (history || []).forEach((p) => blocks.push({ slot: 'history', ...p }));
+            const header = ['slot','createdAt','generator','config','weeks'];
+            const lines = [header.join(',')];
+            blocks.forEach((p) => {
+              lines.push([
+                escapeCSV(p.slot || 'history'),
+                escapeCSV(p.createdAt || ''),
+                escapeCSV(p.generator || ''),
+                escapeCSV(JSON.stringify(p.config || {})),
+                escapeCSV(JSON.stringify(p.weeks || []))
+              ].join(','));
+            });
+            const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'trainiq_blocks.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          };
+
+          const handleImportCSV = (csvText) => {
+            const text = (csvText || '').trim();
+            if (!text) { alert('CSV is empty'); return; }
+            const rows = parseCSV(text);
+            if (!rows.length) { alert('CSV is empty'); return; }
+            const header = rows[0].map(h => (h || '').trim());
+            const idxSlot = header.indexOf('slot');
+            const idxCreated = header.indexOf('createdAt');
+            const idxGen = header.indexOf('generator');
+            const idxConfig = header.indexOf('config');
+            const idxWeeks = header.indexOf('weeks');
+            if (idxConfig === -1 || idxWeeks === -1) { alert('CSV format not recognized'); return; }
+            const imported = [];
+            for (let r = 1; r < rows.length; r++) {
+              const cols = rows[r];
+              if (!cols || cols.every(c => !String(c || '').trim())) continue;
+              try {
+                const cfg = JSON.parse(cols[idxConfig] || '{}');
+                const wks = JSON.parse(cols[idxWeeks] || '[]');
+                imported.push({
+                  slot: idxSlot >= 0 ? (cols[idxSlot] || 'history') : 'history',
+                  createdAt: idxCreated >= 0 ? (cols[idxCreated] || new Date().toISOString()) : new Date().toISOString(),
+                  generator: idxGen >= 0 ? (cols[idxGen] || 'imported') : 'imported',
+                  config: cfg,
+                  weeks: wks
+                });
+              } catch (e) {
+                console.error(e);
+              }
+            }
+            if (!imported.length) { alert('No valid blocks found in CSV'); return; }
+            if (!confirm('Import will replace your current & saved history blocks on this device. Continue?')) return;
+
+            const current = imported.find(p => String(p.slot).toLowerCase() === 'current') || null;
+            const hist = imported.filter(p => String(p.slot).toLowerCase() !== 'current');
+            // Sort history newest-first
+            hist.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            setProgram(current);
+            setHistory(hist.slice(0, 10));
+            if (current && current.config) {
+              setConfig(prev => ({
+                ...DEFAULT_CONFIG,
+                ...prev,
+                ...current.config,
+                oneRMs: { ...DEFAULT_CONFIG.oneRMs, ...(prev.oneRMs || {}), ...((current.config && current.config.oneRMs) || {}) },
+                warmups: { ...DEFAULT_CONFIG.warmups, ...(prev.warmups || {}), ...((current.config && current.config.warmups) || {}) }
+              }));
+            }
+            alert('Import complete');
+          };
           
           const handleGenerate = () => {
             if (program) {
@@ -2007,7 +2116,13 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
                 }} />
               )}
               {tab === 'history' && (
-                <HistoryScreen history={history} onDelete={(idx) => setHistory(prev => prev.filter((_, i) => i !== idx))} />
+                <HistoryScreen history={history} onDelete={(idx) => setHistory(prev => prev.filter((_, i) => i !== idx))} onRedo={(prog) => { setProgram(prog); setConfig(prev => ({
+                      ...DEFAULT_CONFIG,
+                      ...prev,
+                      ...(prog.config || {}),
+                      oneRMs: { ...DEFAULT_CONFIG.oneRMs, ...(prev.oneRMs || {}), ...((prog.config && prog.config.oneRMs) || {}) },
+                      warmups: { ...DEFAULT_CONFIG.warmups, ...(prev.warmups || {}), ...((prog.config && prog.config.warmups) || {}) }
+                    })); setTab('workouts'); }} onExport={() => handleExportCSV()} onImport={(csvText) => handleImportCSV(csvText)} />
               )}
               {tab === 'settings' && (
                 <SettingsScreen config={config} setConfig={setConfig} />
@@ -2698,7 +2813,8 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
 
         // ==================== HISTORY SCREEN ====================
         
-        function HistoryScreen({ history, onDelete }) {
+        function HistoryScreen({ history, onDelete, onRedo, onExport, onImport }) {
+          const fileInputRef = React.useRef(null);
           if (history.length === 0) {
             return (
               <div className="min-h-screen flex items-center justify-center content-with-tabs px-4">
@@ -2707,7 +2823,25 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
                     <span className="text-4xl">📜</span>
                   </div>
                   <h3 className="text-xl font-display font-bold text-gray-400 mb-2">NO HISTORY</h3>
-                  <p className="text-gray-500 text-sm">Saved programs appear here</p>
+                  <p className="text-gray-500 text-sm mb-4">Saved programs appear here</p>
+                  <button onClick={() => fileInputRef.current && fileInputRef.current.click()} className="px-4 py-3 rounded-xl glass text-gray-200 text-xs font-bold btn-touch">IMPORT CSV</button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files && e.target.files[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        try { onImport(String(reader.result || '')); } catch (err) { console.error(err); alert('Could not import CSV'); }
+                        finally { e.target.value = ''; }
+                      };
+                      reader.onerror = () => { alert('Could not read file'); e.target.value = ''; };
+                      reader.readAsText(file);
+                    }}
+                  />
                 </div>
               </div>
             );
@@ -2715,16 +2849,55 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
           
           return (
             <div className="content-with-tabs px-4 py-6">
-              <h2 className="text-2xl font-display font-bold mb-4">HISTORY</h2>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files && e.target.files[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    try {
+                      onImport(String(reader.result || ''));
+                    } catch (err) {
+                      console.error(err);
+                      alert('Could not import CSV');
+                    } finally {
+                      e.target.value = '';
+                    }
+                  };
+                  reader.onerror = () => {
+                    alert('Could not read file');
+                    e.target.value = '';
+                  };
+                  reader.readAsText(file);
+                }}
+              />
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-display font-bold">HISTORY</h2>
+                <div className="flex gap-2">
+                  <button onClick={onExport} className="px-3 py-2 rounded-lg premium-gradient text-white text-xs font-bold btn-touch">EXPORT</button>
+                  <button onClick={() => fileInputRef.current && fileInputRef.current.click()} className="px-3 py-2 rounded-lg glass text-gray-200 text-xs font-bold btn-touch">IMPORT</button>
+                </div>
+              </div>
               <div className="space-y-3">
                 {history.map((prog, idx) => (
                   <div key={idx} className="p-4 rounded-xl glass">
                     <div className="flex justify-between items-start mb-2">
                       <div>
-                        <h3 className="font-bold text-sm">{prog.config.programType}</h3>
+                        <h3 className="font-bold text-sm">{prog.config?.programType || 'PROGRAM'}</h3>
                         <p className="text-xs text-gray-400">{new Date(prog.createdAt).toLocaleDateString()}</p>
                       </div>
-                      <button onClick={() => onDelete(idx)} className="text-red-400 text-xl">×</button>
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => {
+                          if (confirm('Redo this training block and load it into Workouts?')) onRedo(prog);
+                        }} className="text-gray-200 text-lg btn-touch" title="Redo">↻</button>
+                        <button onClick={() => {
+                          if (confirm('Delete this training block?')) onDelete(idx);
+                        }} className="text-red-400 text-xl btn-touch" title="Delete">×</button>
+                      </div>
                     </div>
                   </div>
                 ))}
