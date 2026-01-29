@@ -2405,7 +2405,7 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <h2 className="font-display font-bold text-lg">WEEK {week} OF 12</h2>
-                      <p className="text-xs text-gray-400 mt-0.5">{currentWeek.phase} Phase</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{currentWeek.phase} Phase{config?.programType ? ` • ${config.programType}` : ""}</p>
                     </div>
                     <button onClick={onSave} 
                       className="px-4 py-2 rounded-lg bg-blue-500 text-white text-xs font-bold">
