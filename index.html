@@ -2025,10 +2025,34 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
             if (program) blocks.push({ slot: 'current', ...program });
             (history || []).forEach((p) => blocks.push({ slot: 'history', ...p }));
 
+            // If more than one program exists, let the user choose which to export (no UI changes: uses prompt()).
+            // Options: number = single program, "A" = all.
+            let selectedBlocks = blocks;
+            if (blocks.length > 1) {
+              const lines = ['Select program to export:', 'A) All programs'];
+              blocks.forEach((b, i) => {
+                const pType = b?.config?.programType || 'PROGRAM';
+                const dt = b?.createdAt ? new Date(b.createdAt).toISOString().slice(0,10) : '';
+                const slotLabel = (b.slot === 'current') ? 'Current' : 'History';
+                lines.push(`${i}) ${slotLabel} • ${pType}${dt ? ' • ' + dt : ''}`);
+              });
+              const choice = prompt(lines.join('\n'));
+              if (choice === null) return; // user cancelled
+              const trimmed = String(choice).trim();
+              if (trimmed.toLowerCase() === 'a') {
+                selectedBlocks = blocks;
+              } else {
+                const idx = parseInt(trimmed, 10);
+                if (isNaN(idx) || idx < 0 || idx >= blocks.length) { alert('Invalid selection'); return; }
+                selectedBlocks = [blocks[idx]];
+              }
+            }
+
+            
             const legacyExport = () => {
               const header = ['slot','createdAt','generator','config','weeks'];
               const lines = [header.join(',')];
-              blocks.forEach((p) => {
+              selectedBlocks.forEach((p) => {
                 lines.push([
                   escapeCSV(p.slot || ''),
                   escapeCSV(p.createdAt || ''),
@@ -2061,11 +2085,12 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
             };
 
             const workoutStyleExport = () => {
-              const header = ['Date','Exercise','Weight','Sets','Reps','Rir'];
+              const header = ['Date','Program Type','Exercise','Weight','Sets','Reps','Rir'];
               const lines = [header.join(',')];
 
-              blocks.forEach((p) => {
+              selectedBlocks.forEach((p) => {
                 const createdAt = p.createdAt ? new Date(p.createdAt).toISOString().slice(0,10) : '';
+                const programType = (p?.config?.programType || '');
                 const weeks = Array.isArray(p.weeks) ? p.weeks : [];
                 let workoutCounter = 0;
 
@@ -2086,6 +2111,7 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
 
                       lines.push([
                         escapeCSV(dateStr),
+                        escapeCSV(programType),
                         escapeCSV(name),
                         escapeCSV(String(weight)),
                         escapeCSV(String(sets)),
