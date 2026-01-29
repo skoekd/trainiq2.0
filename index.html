@@ -389,6 +389,64 @@
 
           return exercises;
         }
+
+        // ==================== ADVANCED TRAINING TECHNIQUES ====================
+        // Adds optional advanced techniques metadata WITHOUT changing the UI.
+        // Conservative rules:
+        // - primarily accessories / isolation lifts
+        // - avoid high-fatigue/high-skill compounds
+        // - 0 techniques for Beginners, 1 for Intermediate, 1–2 for Advanced
+        // - none on deload weeks
+        function applyAdvancedTechniques(exercises, { enabled, experience, phaseName, isDeload } = {}) {
+          if (!enabled) return exercises;
+          if (!Array.isArray(exercises) || !exercises.length) return exercises;
+          if (isDeload) return exercises;
+          if (experience === 'Beginner') return exercises;
+
+          const maxPerSession = (experience === 'Advanced') ? 2 : 1;
+
+          // Phase mapping (kept simple + safe)
+          // Base/Accumulation: metabolic techniques
+          // Intensification: rest-pause
+          // Peak: tempo/eccentric emphasis (low-risk)
+          const pickTechnique = (idx) => {
+            if (phaseName === 'Intensification') return 'Rest-Pause';
+            if (phaseName === 'Peak') return 'Tempo / Eccentric';
+            return (idx % 2 === 0) ? 'Myo-Reps' : 'Drop Set';
+          };
+
+          const instructions = {
+            'Drop Set': 'Final set only: go near-failure, reduce load ~20–30%, continue 1–2 drops.',
+            'Rest-Pause': '1 top set near-failure, rest 10–20s, then 2–4 mini-sets of 2–5 reps.',
+            'Myo-Reps': '1 activation set (12–20) near-failure, rest ~15s, then 3–5 mini-sets of 3–5 reps.',
+            'Tempo / Eccentric': 'Slow eccentric (3–5s) on working sets; keep control, don’t chase failure.'
+          };
+
+          // Candidates: accessories first, isolations preferred
+          const candidates = exercises
+            .map((ex, i) => ({ ex, i }))
+            .filter(({ ex }) => ex && ex.role === 'accessory')
+            .filter(({ ex }) => {
+              if (ex.type === 'isolation') return true;
+              // For accessory compounds: only if fatigue/setup are low-ish (when tags exist)
+              const f = ex?.tags?.fatigue;
+              const s = ex?.tags?.setup;
+              return (f == null || f <= 2) && (s == null || s <= 2);
+            });
+
+          let assigned = 0;
+          for (let c = 0; c < candidates.length && assigned < maxPerSession; c++) {
+            const { ex } = candidates[c];
+            if (!ex || ex.advancedTechnique) continue;
+
+            const t = pickTechnique(assigned);
+            ex.advancedTechnique = { name: t, cue: instructions[t] || '' };
+            assigned += 1;
+          }
+
+          return exercises;
+        }
+
         
         function roundWeight(w) {
           const n = parseFloat(w);
@@ -1763,7 +1821,10 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
               });
 
               // Apply supersets if enabled (only non-main lifts)
-              const finalExercises = config.supersets ? applySupersets(exercises, programType) : exercises;
+              let finalExercises = config.supersets ? applySupersets(exercises, programType) : exercises;
+
+              // Optionally tag a small number of accessory movements with advanced training techniques (metadata only)
+              finalExercises = applyAdvancedTechniques(finalExercises, { enabled: !!config.advancedTechniques, experience, phaseName: phase.phase, isDeload: (ramp.deload || phase.isDeload) });
 
               // Suggest loads for main/secondary compound lifts with 1RM if provided
               finalExercises.forEach((ex) => {
@@ -1887,6 +1948,7 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
             programType: '',
             specializationFocus: 'chest',
             supersets: false,
+            advancedTechniques: false,
             oneRMs: { chest: '', lats: '', shoulders: '', quads: '', hamstrings: '' },
             // Warm-up preferences
             warmups: {
@@ -2104,6 +2166,14 @@ const score = (needFit * w.needW) + (stimBase * w.stimW) + romBonus + mainLiftBo
                   </button>
                 </div>
                 
+                <div className="flex items-center justify-between p-4 rounded-xl glass">
+                  <span className="font-semibold text-sm">ADVANCED TECHNIQUES</span>
+                  <button onClick={() => setConfig({...config, advancedTechniques: !config.advancedTechniques})}
+                    className={"w-14 h-8 rounded-full transition " + (config.advancedTechniques ? "bg-orange-500" : "bg-gray-700")}>
+                    <div className={"w-6 h-6 rounded-full bg-white transition-transform " + (config.advancedTechniques ? "translate-x-7" : "translate-x-1")}></div>
+                  </button>
+                </div>
+
                 <button onClick={onGenerate} disabled={!isValid}
                   className={"w-full p-5 rounded-xl font-display font-bold text-lg transition btn-touch " +
                     (isValid ? "premium-gradient text-white shadow-xl" : "glass text-gray-600 cursor-not-allowed")}>
